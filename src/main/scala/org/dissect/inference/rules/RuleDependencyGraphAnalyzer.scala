@@ -24,7 +24,7 @@ object RuleDependencyGraphAnalyzer {
       _.toLayered foreach { layer =>
         println("---" * 3 + "layer " + layer._1 + "---" * 3)
         layer._2.foreach(node => {
-          print(node.value.getName + "(" + RuleUtils.entailmentType(node.value) + ") ")
+          print(node.value.getName + "(" + RuleUtils.entailmentType(node.value) + ")->" + node.diSuccessors.map(r => r.value.getName).mkString("|") + " ")
         })
         println()
       }
