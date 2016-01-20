@@ -3,6 +3,8 @@ package org.dissect.inference.utils
 import org.apache.jena.graph.Triple
 import org.apache.jena.reasoner.TriplePattern
 import org.apache.jena.reasoner.rulesys.Rule
+import org.dissect.inference.rules.RuleEntailmentType
+import org.dissect.inference.rules.RuleEntailmentType._
 
 /**
   * Utility class for rules.
@@ -106,6 +108,22 @@ object RuleUtils {
       )
 
     assertionalHead
+  }
+
+  /**
+    * Returns the type of entailment for the given rule
+    * @param rule the rule to analyze
+    * @return the entailment type
+    */
+  def entailmentType(rule: Rule) : RuleEntailmentType = {
+    if(isAssertional(rule))
+      RuleEntailmentType.ASSERTIONAL
+    else if(isTerminological(rule))
+      RuleEntailmentType.TERMINOLOGICAL
+    else if(isHybrid(rule))
+      RuleEntailmentType.HYBRID
+    else
+      None.get
   }
 
 }
