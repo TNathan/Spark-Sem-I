@@ -17,8 +17,8 @@
     </licenses>
 
     <properties>
-        <maven.compiler.source>1.7</maven.compiler.source>
-        <maven.compiler.target>1.7</maven.compiler.target>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
         <encoding>UTF-8</encoding>
         <scala.version>2.10.5</scala.version>
         <scala.binary.version>2.10</scala.binary.version>
@@ -56,6 +56,27 @@
             <version>1.6.0</version>
         </dependency>
 
+        <!-- Apache JENA 3.x-->
+        <dependency>
+            <groupId>org.apache.jena</groupId>
+            <artifactId>jena-core</artifactId>
+            <version>3.0.1</version>
+        </dependency>
+
+        <!-- Graph API -->
+        <dependency>
+            <groupId>com.assembla.scala-incubator</groupId>
+            <artifactId>graph-core_${scala.binary.version}</artifactId>
+            <version>1.10.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.assembla.scala-incubator</groupId>
+            <artifactId>graph-dot_${scala.binary.version}</artifactId>
+            <version>1.9.0</version>
+        </dependency>
+
+
+
         <!-- Test -->
         <dependency>
             <groupId>junit</groupId>
@@ -69,6 +90,14 @@
             <version>1.2</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- Logging -->
+        <dependency>
+            <groupId>com.typesafe.scala-logging</groupId>
+            <artifactId>scala-logging-slf4j_${scala.binary.version}</artifactId>
+            <version>2.1.2</version>
+        </dependency>
+
     </dependencies>
 
     <build>
