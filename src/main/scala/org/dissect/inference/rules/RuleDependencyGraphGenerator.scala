@@ -3,12 +3,10 @@ package org.dissect.inference.rules
 import org.apache.jena.reasoner.TriplePattern
 import org.apache.jena.reasoner.rulesys.Rule
 import org.apache.jena.vocabulary.RDFS
-import org.dissect.inference.utils.Tabulator
 
 import scala.collection.JavaConversions._
 import scala.language.{existentials, implicitConversions}
 import scalax.collection.GraphEdge.DiEdge
-import scalax.collection.GraphPredef
 import scalax.collection.GraphPredef._
 import scalax.collection.mutable.Graph
 
