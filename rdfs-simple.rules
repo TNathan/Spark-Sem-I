@@ -48,6 +48,3 @@
 # Not needed - replaced by TGC front end
 [rdfs11:  (?a rdfs:subClassOf ?b), (?b rdfs:subClassOf ?c) -> (?a rdfs:subClassOf ?c)]
 [rdfs5: (?a rdfs:subPropertyOf ?b), (?b rdfs:subPropertyOf ?c) -> (?a rdfs:subPropertyOf ?c)]
-
-OWL RL rule for testing
-# [eq-sym: (?A owl:sameAs ?B) -> (?B owl:sameAs ?A)]

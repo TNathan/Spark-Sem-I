@@ -30,25 +30,33 @@
 # Inferencing Template Rules
 #-------------------------------------------
 [prp-dom:
-	(?P rdfs:domain ?C), (?X ?P ?Y) -> (?X rdf:type ?C )]
+	(?P rdfs:domain ?C)
+	-> [D_prp-dom: (?X ?P ?Y) -> (?X rdf:type ?C )]]
 
 [prp-rng:
-	(?P rdfs:range ?C), (?X ?P ?Y) -> (?Y rdf:type ?C )]
+	(?P rdfs:range ?C)
+	-> [D_prp-rng: (?X ?P ?Y) -> (?Y rdf:type ?C )]]
 
 [prp-fp:
-	(?P rdf:type owl:FunctionalProperty), (?A ?P ?B), notLiteral(?B), (?A ?P ?C), notLiteral(?C), notEqual(?B ?C) -> (?B owl:sameAs ?C)]
+	(?P rdf:type owl:FunctionalProperty)
+	-> [D_prp-fp: (?A ?P ?B), notLiteral(?B), (?A ?P ?C), notLiteral(?C), notEqual(?B ?C) -> (?B owl:sameAs ?C)]]
 
 [prp-ifp:
-	(?P rdf:type owl:InverseFunctionalProperty), (?A ?P ?B), (?C ?P ?B), notEqual(?A ?C) -> (?A owl:sameAs ?C)]
+	(?P rdf:type owl:InverseFunctionalProperty)
+	-> [D_prp-ifp: (?A ?P ?B), (?C ?P ?B), notEqual(?A ?C) -> (?A owl:sameAs ?C)]]
 
 [prp-symp:
-	(?P rdf:type owl:SymmetricProperty), (?X ?P ?Y) -> (?Y ?P ?X)]
+	(?P rdf:type owl:SymmetricProperty)
+	-> [D_prp-symp: (?X ?P ?Y) -> (?Y ?P ?X)]]
 
 [prp-trp:
-	(?P rdf:type owl:TransitiveProperty), (?X ?P ?Y), (?Y ?P ?Z) -> (?X ?P ?Z)]
+	(?P rdf:type owl:TransitiveProperty)
+	-> [D_prp-trp: (?X ?P ?Y), (?Y ?P ?Z) -> (?X ?P ?Z)]]
 
 [prp-spo1:
-	(?P rdfs:subPropertyOf ?Q), notEqual(?P ?Q), (?X ?P ?Y) -> (?X ?Q ?Y)]
+	(?P rdfs:subPropertyOf ?Q),
+	notEqual(?P ?Q)
+	-> [D_spo1: (?X ?P ?Y) -> (?X ?Q ?Y)]]
 
 
 #Role chains (owl:propertyChainAxiom) are handled procedurally by dynamically generating rules
