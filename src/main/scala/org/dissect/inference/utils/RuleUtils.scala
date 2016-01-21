@@ -126,4 +126,26 @@ object RuleUtils {
       None.get
   }
 
+  /**
+    * Checks whether a rule itself is cyclic, i.e. it produces triples in the conclusion
+    * that are used as input in the premise.
+    * @param rule the rule to check
+    * @return whether it's cyclic or not
+    */
+  def isCyclic(rule: Rule) : Boolean = {
+    if(isTerminological(rule)) {
+      // check if there is at least one predicate that occurs in body and head
+      val bodyPredicates = rule.getBody
+        .collect{case b:TriplePattern => b}
+        .map(tp => tp.getPredicate).toSet
+      val headPredicates = rule.getBody
+        .collect{case b:TriplePattern => b}
+        .map(tp => tp.getPredicate).toSet
+
+      bodyPredicates.intersect(headPredicates).isEmpty
+    } else {
+      true
+    }
+  }
+
 }
