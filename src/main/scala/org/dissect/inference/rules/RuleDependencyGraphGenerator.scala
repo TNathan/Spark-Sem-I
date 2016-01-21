@@ -15,17 +15,17 @@ import scalax.collection.mutable.Graph
   */
 object RuleDependencyGraphGenerator {
 
-  def generate(rules: Set[Rule]): Graph[Rule, DiEdge] = {
+  def generate(rules: Set[Rule], f:(Rule, Rule) => Boolean = dependsOn): Graph[Rule, DiEdge] = {
     // create empty graph
     val g = Graph[Rule, DiEdge]()
 
     // add edge for each rule r1 that depends on another rule r2
     for (r1 <- rules; r2 <- rules) {
-      if (dependsOn(r1, r2))
+      if (f(r1, r2))
         g += r1 ~> r2
-      else if (dependsOn(r2, r1))
+      else if (f(r2, r1))
         g += r2 ~> r1
-      else if (dependsOn(r1, r1))
+      else if (f(r1, r1))
         g += r1 ~> r1
     }
 
