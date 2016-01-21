@@ -17,6 +17,7 @@ object RuleDependencyGraphAnalyzer {
     // check for cycles
     val cycle = g.findCycle
     println("Cycle found: " + cycle.nonEmpty)
+    println(cycle.getOrElse(println))
 
     // topological sort
     g.topologicalSort.fold(
@@ -34,13 +35,20 @@ object RuleDependencyGraphAnalyzer {
 
   def main(args: Array[String]) {
     // we re-use the JENA API for parsing rules
-    val filename = "rdfs-simple.rules"
-    val rules = Rule.parseRules(org.apache.jena.reasoner.rulesys.Util.loadRuleParserFromResourceFile(filename))
+    val filenames = List("rdfs-simple.rules", "owl_rl.rules")
 
-    // generate graph
-    val g = RuleDependencyGraphGenerator.generate(rules.toSet)
+    filenames.foreach { filename =>
+      println(filename)
 
-    // analyze graph
-    RuleDependencyGraphAnalyzer.analyze(g)
+      // parse the rules
+      val rules = Rule.parseRules(org.apache.jena.reasoner.rulesys.Util.loadRuleParserFromResourceFile(filename))
+
+      // generate graph
+      val g = RuleDependencyGraphGenerator.generate(rules.toSet)
+
+      // analyze graph
+      RuleDependencyGraphAnalyzer.analyze(g)
+    }
+
   }
 }
