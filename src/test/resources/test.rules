@@ -1,0 +1,10 @@
+[prp-trp: (?p, rdf:type, owl:TransitiveProperty), (?x, ?p, ?y), (?y, ?p, ?z)	-> (?x, ?p, ?z)]
+[prp-symp: (?p, rdf:type, owl:SymmetricProperty), (?x, ?p, ?y) -> (?y, ?p, ?x)]
+
+# RDFS 1.1 rules
+[rdfs2:  (?p rdfs:domain ?c), (?x ?p ?y) -> (?x rdf:type ?c)]
+[rdfs3:  (?p rdfs:range ?c), (?x ?p ?y)  -> (?y rdf:type ?c) ]
+[rdfs5: (?a rdfs:subPropertyOf ?b), (?b rdfs:subPropertyOf ?c) -> (?a rdfs:subPropertyOf ?c)]
+[rdfs7:  (?p rdfs:subPropertyOf ?q), (?a ?p ?b), notEqual(?p,?q) -> (?a ?q ?b)]
+[rdfs9:  (?x rdfs:subClassOf ?y), (?a rdf:type ?x) -> (?a rdf:type ?y) ]
+[rdfs11:  (?a rdfs:subClassOf ?b), (?b rdfs:subClassOf ?c) -> (?a rdfs:subClassOf ?c)]
