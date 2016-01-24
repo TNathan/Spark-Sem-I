@@ -7,6 +7,7 @@ import scala.collection.JavaConversions._
 import scala.language.{existentials, implicitConversions}
 import scalax.collection.GraphEdge.DiEdge
 import scalax.collection.mutable.Graph
+import org.dissect.inference.utils.GraphUtils._
 
 /**
   * @author Lorenz Buehmann
@@ -35,7 +36,7 @@ object RuleDependencyGraphAnalyzer {
 
   def main(args: Array[String]) {
     // we re-use the JENA API for parsing rules
-    val filenames = List("rdfs-simple.rules", "owl_rl.rules")
+    val filenames = List("rdfs-simple.rules");//, "owl_rl.rules")
 
     filenames.foreach { filename =>
       println(filename)
@@ -48,6 +49,8 @@ object RuleDependencyGraphAnalyzer {
 
       // analyze graph
       RuleDependencyGraphAnalyzer.analyze(g)
+
+      g.export(filename + ".graphml")
     }
 
   }
