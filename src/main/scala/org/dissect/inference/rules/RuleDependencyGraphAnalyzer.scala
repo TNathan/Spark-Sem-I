@@ -1,10 +1,13 @@
 package org.dissect.inference.rules
 
+import java.io.File
+
 import org.apache.jena.reasoner.rulesys.Rule
-import org.dissect.inference.utils.RuleUtils
+import org.dissect.inference.utils.{GraphUtils, RuleUtils}
 
 import scala.collection.JavaConversions._
 import scala.language.{existentials, implicitConversions}
+import scala.reflect.io.Directory
 import scalax.collection.GraphEdge.DiEdge
 import scalax.collection.mutable.Graph
 import org.dissect.inference.utils.GraphUtils._
@@ -38,11 +41,21 @@ object RuleDependencyGraphAnalyzer {
     // we re-use the JENA API for parsing rules
     val filenames = List("rdfs-simple.rules");//, "owl_rl.rules")
 
+    val graphDir = new File("graph")
+    graphDir.mkdir()
+
+
     filenames.foreach { filename =>
       println(filename)
 
       // parse the rules
       val rules = Rule.parseRules(org.apache.jena.reasoner.rulesys.Util.loadRuleParserFromResourceFile(filename))
+
+      // print each rule as graph
+      rules.foreach{r => {
+        val g = RuleUtils.asGraph(r).export(new File(graphDir, r.getName + ".graphml").toString)
+        }
+      }
 
       // generate graph
       val g = RuleDependencyGraphGenerator.generate(rules.toSet)
@@ -50,7 +63,8 @@ object RuleDependencyGraphAnalyzer {
       // analyze graph
       RuleDependencyGraphAnalyzer.analyze(g)
 
-      g.export(filename + ".graphml")
+      // export rule dependency graph
+      g.export(new File(graphDir, filename + ".graphml").toString)
     }
 
   }

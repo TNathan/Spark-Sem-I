@@ -166,6 +166,22 @@ object RuleUtils {
   }
 
   /**
+    * Returns a graph representation of the triple patterns contained in the rule.
+    * @param rule the rule
+    * @return the directed labeled graph
+    */
+  def asGraph(rule: Rule) : Graph[Node, LDiEdge] = {
+    // create graph for body
+    val bodyGraph = graphOfBody(rule)
+
+    // create graph for head
+    val headGraph = graphOfHead(rule)
+
+    // return union
+    bodyGraph union headGraph
+  }
+
+  /**
     * Checks whether a rule itself is cyclic. Intuitively, this means to check for triples produced in the conclusion
     * that are used as input in the premise.
     *
@@ -204,7 +220,7 @@ object RuleUtils {
           .collect { case b: TriplePattern => b }
           .map(tp => tp.getPredicate).toSet
 
-        !bodyPredicates.intersect(headPredicates).isEmpty
+        bodyPredicates.intersect(headPredicates).nonEmpty
       case ASSERTIONAL =>
         // check if there is at least one predicate that occurs in body and head
         val bodyPredicates = rule.getBody
@@ -213,7 +229,7 @@ object RuleUtils {
         val headPredicates = rule.getHead
           .collect { case b: TriplePattern => b }
           .map(tp => tp.getPredicate).toSet
-        !bodyPredicates.intersect(headPredicates).isEmpty
+        bodyPredicates.intersect(headPredicates).nonEmpty
       case _ =>
         // check if there is at least one predicate that occurs in body and head
         val bodyPredicates = rule.getBody
@@ -222,7 +238,7 @@ object RuleUtils {
         val headPredicates = rule.getHead
           .collect { case b: TriplePattern => b }
           .map(tp => tp.getPredicate).toSet
-        !bodyPredicates.intersect(headPredicates).isEmpty
+        bodyPredicates.intersect(headPredicates).nonEmpty
 
     }
   }
