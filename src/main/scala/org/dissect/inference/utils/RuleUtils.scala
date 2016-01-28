@@ -182,11 +182,53 @@ object RuleUtils {
   }
 
   /**
+    * Checks whether a rule denotes the transitive closure(TC) for a given predicate p, i.e.
+    * the rule looks like
+    * <code>(?s p ?o1), (?o1, p ?o2) -> (?s p ?o2)</code>
+    *
+    * @param rule the rule to check
+    * @return whether it denotes the TC or not
+    */
+  def isTransitiveClosure(rule: Rule) : Boolean = {
+    // TPs contained in body
+    val bodyTriplePatterns = rule.bodyTriplePatterns()
+
+    var isTC = false
+
+    // TODO handle body with more than 2 TPs
+    if (bodyTriplePatterns.size == 2) {
+      // graph for body
+      val bodyGraph = graphOfBody(rule)
+
+      // graph for head
+      val headGraph = graphOfHead(rule)
+
+      // get source and target node from head (we currently assume that there is only one edge)
+      val edge = headGraph.edges.head
+      val source = edge.source
+      val target = edge.target
+
+      // get the path in body graph
+      val path = (bodyGraph get source) pathTo (bodyGraph get target)
+
+      // check if there is a path  ?s -> ?o2 in body such that there is at least one edge labeled with the same predicate
+      isTC = path match {
+        case Some(value) => { // there is one edge labeled with p
+          !value.edges.filter(_.label.equals(edge.label)).toSeq.isEmpty
+        }
+        case None => false
+      }
+    }
+
+    isTC
+  }
+
+  /**
     * Checks whether a rule itself is cyclic. Intuitively, this means to check for triples produced in the conclusion
     * that are used as input in the premise.
     *
     * This is rather tricky, i.e. a naive approach which simply looks e.g. for predicates that occur in both, premise and conclusion
-    * is not enough because, e.g. a rule [(?s ?p =o) -> (?o ?p ?s)] would lead to an infinite loop without producing anything new
+    * is not enough because, e.g. a rule [(?s ?p ?o) -> (?o ?p ?s)] would lead to an infinite loop without producing anything new
     * after one iteration. On the other hand, for rules like [(?s ?p ?o1), (?o1 ?p ?o2) -> (?s ?p ?o2)] it's valid.
     * TODO we do not only have to check for common predicates, but also have to analyze the subjects/objects of the
     * triple patterns.
@@ -195,20 +237,21 @@ object RuleUtils {
     * @return whether it's cyclic or not
     */
   def isCyclic(rule: Rule) : Boolean = {
+    // get the type of the rule
     val ruleType = entailmentType(rule)
 
+    // predicates contained in body
     val bodyPredicates = rule.getBody
       .collect { case b: TriplePattern => b }
       .map(tp => tp.getPredicate).toSet
+
+    // predicates contained in head
     val headPredicates = rule.getHead
       .collect { case b: TriplePattern => b }
       .map(tp => tp.getPredicate).toSet
 
+    // predicates that are contained in body and head
     val intersection = bodyPredicates.intersect(headPredicates)
-    println(headPredicates)
-    println(bodyPredicates)
-    println(rule)
-    println(intersection)
 
     ruleType match {
       case TERMINOLOGICAL =>
@@ -263,6 +306,26 @@ object RuleUtils {
       r => if (r.getName.equals(name)) return Some(r)
     )
     None
+  }
+
+  /**
+    * Some convienece methods that can be called directly on a rule object.
+    * @param rule
+    */
+  implicit class RuleExtension(val rule: Rule) {
+    /**
+      * Returns the triple patterns contained in the body of the rule.
+      */
+    def bodyTriplePatterns(): Seq[TriplePattern] = {
+      return rule.getBody.collect { case b: TriplePattern => b }
+    }
+
+    /**
+      * Returns the triple patterns contained in the head of the rule.
+      */
+    def headTriplePatterns(): Seq[TriplePattern] = {
+      return rule.getHead.collect { case b: TriplePattern => b }
+    }
   }
 
 

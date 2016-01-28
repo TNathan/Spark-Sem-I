@@ -29,7 +29,10 @@ object RuleDependencyGraphAnalyzer {
       _.toLayered foreach { layer =>
         println("---" * 3 + "layer " + layer._1 + "---" * 3)
         layer._2.foreach(node => {
-          print(node.value.getName + "(" + RuleUtils.entailmentType(node.value) + ")->" + node.diSuccessors.map(r => r.value.getName).mkString("|") + " ")
+          val rule = node.value
+          val ruleType = RuleUtils.entailmentType(rule)
+          val isTC = RuleUtils.isTransitiveClosure(rule)
+          print(rule.getName + "(" + ruleType + (if (isTC) ", TC" else "")  + ")->" + node.diSuccessors.map(r => r.value.getName).mkString("|") + " ")
         })
         println()
       }
@@ -39,7 +42,7 @@ object RuleDependencyGraphAnalyzer {
 
   def main(args: Array[String]) {
     // we re-use the JENA API for parsing rules
-    val filenames = List("rdfs-simple.rules");//, "owl_rl.rules")
+    val filenames = List("rules/rdfs-simple.rules");//, "rules/owl_rl.rules")
 
     val graphDir = new File("graph")
     graphDir.mkdir()
@@ -52,9 +55,8 @@ object RuleDependencyGraphAnalyzer {
       val rules = Rule.parseRules(org.apache.jena.reasoner.rulesys.Util.loadRuleParserFromResourceFile(filename))
 
       // print each rule as graph
-      rules.foreach{r => {
+      rules.foreach { r =>
         val g = RuleUtils.asGraph(r).export(new File(graphDir, r.getName + ".graphml").toString)
-        }
       }
 
       // generate graph
