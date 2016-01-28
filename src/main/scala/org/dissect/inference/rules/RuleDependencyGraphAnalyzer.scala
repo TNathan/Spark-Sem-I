@@ -42,7 +42,11 @@ object RuleDependencyGraphAnalyzer {
 
   def main(args: Array[String]) {
     // we re-use the JENA API for parsing rules
-    val filenames = List("rules/rdfs-simple.rules");//, "rules/owl_rl.rules")
+    val filenames = List(
+//      "rules/rdfs-simple.rules"
+      "rules/owl_horst.rules"
+//    "rules/owl_rl.rules"
+    )
 
     val graphDir = new File("graph")
     graphDir.mkdir()
@@ -66,7 +70,7 @@ object RuleDependencyGraphAnalyzer {
       RuleDependencyGraphAnalyzer.analyze(g)
 
       // export rule dependency graph
-      g.export(new File(graphDir, filename + ".graphml").toString)
+      g.export(new File(graphDir, new File(filename).getName + ".graphml").toString)
     }
 
   }
