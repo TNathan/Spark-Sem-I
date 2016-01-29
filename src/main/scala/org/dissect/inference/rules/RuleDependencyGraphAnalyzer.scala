@@ -17,6 +17,23 @@ import org.dissect.inference.utils.GraphUtils._
   */
 object RuleDependencyGraphAnalyzer {
 
+  /**
+    * Analyze a set of rules.
+    *
+    * @param rules the rules to analyze
+    */
+  def analyze(rules: Set[Rule]) : Unit = {
+
+    // split into TBox and ABox rules first
+    val tRules = rules.filter(r => RuleUtils.isTerminological(r))
+
+
+    val tRulesGraph = RuleDependencyGraphGenerator.generate(tRules)
+
+    RuleDependencyGraphAnalyzer.analyze(tRulesGraph)
+
+  }
+
   def analyze(g: Graph[Rule, DiEdge]) = {
     // check for cycles
     val cycle = g.findCycle
@@ -56,7 +73,7 @@ object RuleDependencyGraphAnalyzer {
       println(filename)
 
       // parse the rules
-      val rules = Rule.parseRules(org.apache.jena.reasoner.rulesys.Util.loadRuleParserFromResourceFile(filename))
+      val rules = RuleUtils.load(filename).toSet
 
       // print each rule as graph
       rules.foreach { r =>
@@ -67,7 +84,7 @@ object RuleDependencyGraphAnalyzer {
       val g = RuleDependencyGraphGenerator.generate(rules.toSet)
 
       // analyze graph
-      RuleDependencyGraphAnalyzer.analyze(g)
+      RuleDependencyGraphAnalyzer.analyze(rules)
 
       // export rule dependency graph
       g.export(new File(graphDir, new File(filename).getName + ".graphml").toString)
