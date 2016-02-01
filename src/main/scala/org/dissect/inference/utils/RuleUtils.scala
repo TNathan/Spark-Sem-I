@@ -229,41 +229,15 @@ object RuleUtils {
     * @example [r1: (?s p1 ?o), (?o p1 ?s) -> (?s p2 ?o)] and [r2: (?s p2 ?o) -> (?o p1 ?s)
     *
     *
-    * @param rule the rule to check
-    * @return whether it denotes the TC or not
+    * @param rule1 the first rule
+    * @param rule2 the second rule
+    * @return whether rule1 is the inverse of rule2
     */
   def isInverseOf(rule1: Rule, rule2: Rule) : Boolean = {
     // TPs contained in body
-    val bodyTriplePatterns = rule.bodyTriplePatterns()
+    val bodyTriplePatterns = rule1.bodyTriplePatterns()
 
-    var isTC = false
-
-    // TODO handle body with more than 2 TPs
-    if (bodyTriplePatterns.size == 2) {
-      // graph for body
-      val bodyGraph = graphOfBody(rule)
-
-      // graph for head
-      val headGraph = graphOfHead(rule)
-
-      // get source and target node from head (we currently assume that there is only one edge)
-      val edge = headGraph.edges.head
-      val source = edge.source
-      val target = edge.target
-
-      // get the path in body graph
-      val path = (bodyGraph get source) pathTo (bodyGraph get target)
-
-      // check if there is a path  ?s -> ?o2 in body such that there is at least one edge labeled with the same predicate
-      isTC = path match {
-        case Some(value) => { // there is one edge labeled with p
-          !value.edges.filter(_.label.equals(edge.label)).toSeq.isEmpty
-        }
-        case None => false
-      }
-    }
-
-    isTC
+    false
   }
 
   /**
