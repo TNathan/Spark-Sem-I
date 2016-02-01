@@ -1,23 +1,20 @@
 package org.dissect.inference.utils
 
-import java.io.{FileOutputStream, ByteArrayOutputStream, File, FileWriter}
+import java.io.{ByteArrayOutputStream, File, FileOutputStream, FileWriter}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 
 import com.itextpdf.text.PageSize
 import org.apache.jena.graph.Node
 import org.apache.jena.reasoner.rulesys.Rule
-import org.gephi.datalab.api.AttributeColumnsController
-import org.gephi.graph.api
 import org.gephi.graph.api.GraphController
 import org.gephi.io.exporter.api.ExportController
 import org.gephi.io.exporter.preview.PDFExporter
-import org.gephi.io.exporter.spi.Exporter
 import org.gephi.io.importer.api.{EdgeDirectionDefault, ImportController}
 import org.gephi.io.processor.plugin.DefaultProcessor
 import org.gephi.layout.plugin.force.StepDisplacement
 import org.gephi.layout.plugin.force.yifanHu.YifanHuLayout
-import org.gephi.preview.api.{Item, PreviewProperty, PreviewModel, PreviewController}
+import org.gephi.preview.api.{Item, PreviewController, PreviewProperty}
 import org.gephi.preview.types.EdgeColor
 import org.gephi.project.api.ProjectController
 import org.jgrapht.DirectedGraph
@@ -25,10 +22,9 @@ import org.jgrapht.ext._
 import org.jgrapht.graph.{DefaultDirectedGraph, DefaultEdge}
 import org.openide.util.Lookup
 
+import scala.collection.JavaConversions._
 import scalax.collection.GraphEdge.DiEdge
 import scalax.collection.edge.LDiEdge
-
-import scala.collection.JavaConversions._
 
 /**
   * @author Lorenz Buehmann
@@ -39,6 +35,7 @@ object GraphUtils {
   implicit class ClassRuleDependencyGraphExporter(val graph: scalax.collection.mutable.Graph[Rule, DiEdge]) {
     /**
       * Export the rule dependency graph to GraphML format.
+      *
       * @param filename the target file
       */
     def export(filename: String) = {
@@ -92,8 +89,105 @@ object GraphUtils {
   }
 
   implicit class ClassRuleTriplePatternGraphExporter(val graph: scalax.collection.mutable.Graph[Node, LDiEdge]) {
+
+    def export2(filename: String) = {
+      //Init a project - and therefore a workspace
+      val pc = Lookup.getDefault().lookup(classOf[ProjectController]);
+      pc.newProject();
+      val workspace = pc.getCurrentWorkspace();
+
+      //See if graph is well imported
+      val graphModel = Lookup.getDefault().lookup(classOf[GraphController]).getGraphModel;
+      val g = graphModel.getDirectedGraph
+      val factory = graphModel.factory()
+
+      val edges = graph.edges.toList
+
+      val nodeCache = collection.mutable.Map[String, org.gephi.graph.api.Node]()
+
+      edges.foreach { e =>
+        val nodes = e.nodes.toList
+        var source = nodeCache.get(nodes(0).toString()) match {
+          case Some(value) => value
+          case None => {
+            val source2 = factory.newNode(nodes(0).toString())
+            source2.setLabel(nodes(0).toString())
+            println()
+            g.addNode(source2)
+            nodeCache(nodes(0).toString()) = source2
+            source2
+          }
+        }
+        var target = nodeCache.get(nodes(1).toString()) match {
+          case Some(value) => value
+          case None => {
+            val target2 = factory.newNode(nodes(1).toString())
+            target2.setLabel(nodes(1).toString())
+            g.addNode(target2)
+            nodeCache(nodes(1).toString()) = target2
+            target2
+          }
+        }
+        val edge = factory.newEdge(source, target, true)
+
+
+        g.addEdge(edge)
+      }
+
+      println("Nodes: " + g.getNodeCount());
+      println("Edges: " + g.getEdgeCount());
+
+//        val target = factory.newNode(nodes(1).toString())
+//        target.setLabel(nodes(1).value.toString)
+//        val edge = factory.newEdge(source, target, true)
+//        g.addNode(source)
+//        g.addNode(target)
+//        g.addEdge(edge)
+//      }
+
+      //Run YifanHuLayout for 100 passes - The layout always takes the current visible view
+      val layout = new YifanHuLayout(null, new StepDisplacement(1f));
+      layout.setGraphModel(graphModel);
+      layout.resetPropertiesValues();
+      layout.setOptimalDistance(200f);
+
+      layout.initAlgo();
+      for (i <- 0 to 100 if layout.canAlgo()) {
+        layout.goAlgo();
+      }
+      layout.endAlgo();
+
+      val model = Lookup.getDefault().lookup(classOf[PreviewController]).getModel();
+      model.getProperties().putValue(PreviewProperty.SHOW_NODE_LABELS, true);
+      model.getProperties().putValue(PreviewProperty.EDGE_CURVED, false);
+      model.getProperties().putValue(PreviewProperty.EDGE_COLOR, new EdgeColor(java.awt.Color.GRAY));
+      model.getProperties().putValue(PreviewProperty.EDGE_THICKNESS, 0.1f);
+      val font = model.getProperties().getFontValue(PreviewProperty.NODE_LABEL_FONT).deriveFont(8)
+      model.getProperties().putValue(PreviewProperty.NODE_LABEL_FONT, model.getProperties().getFontValue(PreviewProperty.NODE_LABEL_FONT).deriveFont(8));
+
+      for (item <- model.getItems(Item.NODE_LABEL)) {
+        println(item)
+      }
+
+
+      //Export full graph
+      val ec = Lookup.getDefault().lookup(classOf[ExportController]);
+
+      ec.exportFile(new File("io_gexf.gexf"));
+
+      //PDF Exporter config and export to Byte array
+      val pdfExporter = ec.getExporter("pdf").asInstanceOf[PDFExporter];
+      pdfExporter.setPageSize(PageSize.A0);
+      pdfExporter.setWorkspace(workspace);
+      val baos = new ByteArrayOutputStream();
+      ec.exportStream(baos, pdfExporter);
+      new FileOutputStream(filename + ".pdf").write(baos.toByteArray())
+
+
+    }
     /**
       * Export the rule dependency graph to GraphML format.
+      *
       * @param filename the target file
       */
     def export(filename: String) = {
@@ -175,6 +269,14 @@ object GraphUtils {
       System.out.println("Nodes: " + diGraph.getNodeCount());
       System.out.println("Edges: " + diGraph.getEdgeCount());
 
+      for(i <- 0 to graphModel.getNodeTable.countColumns()-1) {
+        val col = graphModel.getNodeTable.getColumn(i)
+        println(col.getId)
+        println(diGraph.getNodes().toList(0).getAttribute(col))
+
+      }
+
+
       for(node <- diGraph.getNodes.toCollection.toList) {
 //        println(node.getAttribute("node_label"))
       }
@@ -185,11 +287,11 @@ object GraphUtils {
       layout.resetPropertiesValues();
       layout.setOptimalDistance(200f);
 
-      layout.initAlgo();
-      for (i <- 0 to 100 if layout.canAlgo()) {
-        layout.goAlgo();
-      }
-      layout.endAlgo();
+//      layout.initAlgo();
+//      for (i <- 0 to 100 if layout.canAlgo()) {
+//        layout.goAlgo();
+//      }
+//      layout.endAlgo();
 
       val model = Lookup.getDefault().lookup(classOf[PreviewController]).getModel();
       model.getProperties().putValue(PreviewProperty.SHOW_NODE_LABELS, true);
@@ -198,6 +300,7 @@ object GraphUtils {
       model.getProperties().putValue(PreviewProperty.EDGE_THICKNESS, 0.1f);
       model.getProperties().putValue(PreviewProperty.NODE_LABEL_FONT, model.getProperties().getFontValue(PreviewProperty.NODE_LABEL_FONT).deriveFont(8));
 //      model.getProperties.putValue(Item.NODE_LABEL, "vertex_label")
+      model.getProperties.putValue(Item.NODE_LABEL, "Vertex Label")
 
       for (item <- model.getItems(Item.NODE_LABEL)) {
         println(item)
@@ -216,8 +319,6 @@ object GraphUtils {
       ec.exportStream(baos, pdfExporter);
       new FileOutputStream(filename + ".pdf").write(baos.toByteArray())
     }
-
-
   }
 
   class LabeledEdge(val label: String) extends DefaultEdge {

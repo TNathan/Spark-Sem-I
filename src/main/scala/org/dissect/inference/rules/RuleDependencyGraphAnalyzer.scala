@@ -53,7 +53,7 @@ object RuleDependencyGraphAnalyzer {
 
       // print each rule as graph
       rules.foreach{r => {
-        val g = RuleUtils.asGraph(r).export(new File(graphDir, r.getName + ".graphml").toString)
+        val g = RuleUtils.asGraph(r).export2(new File(graphDir, r.getName + ".graphml").toString)
         }
       }
 
