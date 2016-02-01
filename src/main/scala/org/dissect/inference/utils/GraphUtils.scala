@@ -7,6 +7,8 @@ import java.nio.file.{Files, Paths}
 import com.itextpdf.text.PageSize
 import org.apache.jena.graph.Node
 import org.apache.jena.reasoner.rulesys.Rule
+import org.apache.jena.shared.PrefixMapping
+import org.apache.jena.shared.impl.PrefixMappingImpl
 import org.gephi.graph.api.GraphController
 import org.gephi.io.exporter.api.ExportController
 import org.gephi.io.exporter.preview.PDFExporter
@@ -90,101 +92,76 @@ object GraphUtils {
 
   implicit class ClassRuleTriplePatternGraphExporter(val graph: scalax.collection.mutable.Graph[Node, LDiEdge]) {
 
-    def export2(filename: String) = {
-      //Init a project - and therefore a workspace
-      val pc = Lookup.getDefault().lookup(classOf[ProjectController]);
-      pc.newProject();
-      val workspace = pc.getCurrentWorkspace();
 
-      //See if graph is well imported
-      val graphModel = Lookup.getDefault().lookup(classOf[GraphController]).getGraphModel;
-      val g = graphModel.getDirectedGraph
-      val factory = graphModel.factory()
-
-      val edges = graph.edges.toList
-
-      val nodeCache = collection.mutable.Map[String, org.gephi.graph.api.Node]()
-
-      edges.foreach { e =>
-        val nodes = e.nodes.toList
-        var source = nodeCache.get(nodes(0).toString()) match {
-          case Some(value) => value
-          case None => {
-            val source2 = factory.newNode(nodes(0).toString())
-            source2.setLabel(nodes(0).toString())
-            println()
-            g.addNode(source2)
-            nodeCache(nodes(0).toString()) = source2
-            source2
-          }
-        }
-        var target = nodeCache.get(nodes(1).toString()) match {
-          case Some(value) => value
-          case None => {
-            val target2 = factory.newNode(nodes(1).toString())
-            target2.setLabel(nodes(1).toString())
-            g.addNode(target2)
-            nodeCache(nodes(1).toString()) = target2
-            target2
-          }
-        }
-        val edge = factory.newEdge(source, target, true)
-
-
-        g.addEdge(edge)
-      }
-
-      println("Nodes: " + g.getNodeCount());
-      println("Edges: " + g.getEdgeCount());
-
-//        val target = factory.newNode(nodes(1).toString())
-//        target.setLabel(nodes(1).value.toString)
-//        val edge = factory.newEdge(source, target, true)
-//        g.addNode(source)
-//        g.addNode(target)
+//    def export2(filename: String) = {
+//
+//      // Gephi
+//      //Init a project - and therefore a workspace
+//      val pc = Lookup.getDefault().lookup(classOf[ProjectController]);
+//      pc.newProject();
+//      val workspace = pc.getCurrentWorkspace();
+//
+//      //Get controllers and models
+//      val importController = Lookup.getDefault().lookup(classOf[ImportController]);
+//
+//
+//      //See if graph is well imported
+//      val graphModel = Lookup.getDefault().lookup(classOf[GraphController]).getModel;
+//      val g = graphModel.getDirectedGraph();
+//
+//      val edges = graph.edges.toList
+//
+//      edges.foreach { e =>
+//        val nodes = e.nodes.toList
+//        val source = graphModel.factory().newNode(nodes(0).toString())
+//        val target = graphModel.factory().newNode(nodes(1).toString())
+//        if(!g.contains(source))
+//          g.addNode(source)
+//        if(!g.contains(target))
+//          g.addNode(target)
+//        val edge = graphModel.factory().newEdge(source, target, 1.0f, true)
 //        g.addEdge(edge)
 //      }
+//
+//
+//      //Run YifanHuLayout for 100 passes - The layout always takes the current visible view
+//      val layout = new YifanHuLayout(null, new StepDisplacement(1f));
+//      layout.setGraphModel(graphModel);
+//      layout.resetPropertiesValues();
+//      layout.setOptimalDistance(200f);
+//
+//      layout.initAlgo();
+//      for (i <- 0 to 100 if layout.canAlgo()) {
+//        layout.goAlgo();
+//      }
+//      layout.endAlgo();
+//
+//      val model = Lookup.getDefault().lookup(classOf[PreviewController]).getModel();
+//      model.getProperties().putValue(PreviewProperty.SHOW_NODE_LABELS, true);
+//      model.getProperties().putValue(PreviewProperty.EDGE_CURVED, false);
+//      model.getProperties().putValue(PreviewProperty.EDGE_COLOR, new EdgeColor(java.awt.Color.GRAY));
+//      model.getProperties().putValue(PreviewProperty.EDGE_THICKNESS, 0.1f);
+//      model.getProperties().putValue(PreviewProperty.NODE_LABEL_FONT, model.getProperties().getFontValue(PreviewProperty.NODE_LABEL_FONT).deriveFont(8));
+//      //      model.getProperties.putValue(Item.NODE_LABEL, "vertex_label")
+//
+//      for (item <- model.getItems(Item.NODE_LABEL)) {
+//        println(item)
+//      }
+//
+//
+//      //Export full graph
+//      val ec = Lookup.getDefault().lookup(classOf[ExportController]);
+//      //      ec.exportFile(new File("io_gexf.gexf"));
+//
+//      //PDF Exporter config and export to Byte array
+//      val pdfExporter = ec.getExporter("pdf").asInstanceOf[PDFExporter];
+//      pdfExporter.setPageSize(PageSize.A0);
+//      pdfExporter.setWorkspace(workspace);
+//      val baos = new ByteArrayOutputStream();
+//      ec.exportStream(baos, pdfExporter);
+//      new FileOutputStream(filename + ".pdf").write(baos.toByteArray())
+//    }
 
-      //Run YifanHuLayout for 100 passes - The layout always takes the current visible view
-      val layout = new YifanHuLayout(null, new StepDisplacement(1f));
-      layout.setGraphModel(graphModel);
-      layout.resetPropertiesValues();
-      layout.setOptimalDistance(200f);
-
-      layout.initAlgo();
-      for (i <- 0 to 100 if layout.canAlgo()) {
-        layout.goAlgo();
-      }
-      layout.endAlgo();
-
-      val model = Lookup.getDefault().lookup(classOf[PreviewController]).getModel();
-      model.getProperties().putValue(PreviewProperty.SHOW_NODE_LABELS, true);
-      model.getProperties().putValue(PreviewProperty.EDGE_CURVED, false);
-      model.getProperties().putValue(PreviewProperty.EDGE_COLOR, new EdgeColor(java.awt.Color.GRAY));
-      model.getProperties().putValue(PreviewProperty.EDGE_THICKNESS, 0.1f);
-      val font = model.getProperties().getFontValue(PreviewProperty.NODE_LABEL_FONT).deriveFont(8)
-      model.getProperties().putValue(PreviewProperty.NODE_LABEL_FONT, model.getProperties().getFontValue(PreviewProperty.NODE_LABEL_FONT).deriveFont(8));
-
-      for (item <- model.getItems(Item.NODE_LABEL)) {
-        println(item)
-      }
-
-
-      //Export full graph
-      val ec = Lookup.getDefault().lookup(classOf[ExportController]);
-
-      ec.exportFile(new File("io_gexf.gexf"));
-
-      //PDF Exporter config and export to Byte array
-      val pdfExporter = ec.getExporter("pdf").asInstanceOf[PDFExporter];
-      pdfExporter.setPageSize(PageSize.A0);
-      pdfExporter.setWorkspace(workspace);
-      val baos = new ByteArrayOutputStream();
-      ec.exportStream(baos, pdfExporter);
-      new FileOutputStream(filename + ".pdf").write(baos.toByteArray())
-
-
-    }
     /**
       * Export the rule dependency graph to GraphML format.
       *
@@ -202,22 +179,22 @@ object GraphUtils {
         val target = nodes(1)
         g.addVertex(source)
         g.addVertex(target)
-        g.addEdge(source, target, new LabeledEdge(e.label.toString))
+        g.addEdge(source, target, new LabeledEdge(PrefixMapping.Standard.shortForm(e.label.toString)))
       }
 
       // In order to be able to export edge and node labels and IDs,
       // we must implement providers for them
       val vertexIDProvider = new VertexNameProvider[Node]() {
-        override def getVertexName(v: Node): String = v.getName
+        override def getVertexName(v: Node): String = v.toString(PrefixMapping.Standard)
       }
 
       val vertexNameProvider = new VertexNameProvider[Node]() {
-        override def getVertexName(v: Node): String = v.getName
+        override def getVertexName(v: Node): String = v.toString(PrefixMapping.Standard)
       }
 
       val edgeIDProvider = new EdgeNameProvider[LabeledEdge]() {
         override def getEdgeName(edge: LabeledEdge): String = {
-          g.getEdgeSource(edge) + " > " + edge.label + " > " + g.getEdgeTarget(edge)
+          g.getEdgeSource(edge).toString(PrefixMapping.Standard) + " > " + edge.label + " > " + g.getEdgeTarget(edge).toString(PrefixMapping.Standard)
         }
       }
 
@@ -264,21 +241,17 @@ object GraphUtils {
       importController.process(container, new DefaultProcessor(), workspace);
 
       //See if graph is well imported
-      val graphModel = Lookup.getDefault().lookup(classOf[GraphController]).getGraphModel;
+      val graphModel = Lookup.getDefault().lookup(classOf[GraphController]).getGraphModel
       val diGraph = graphModel.getDirectedGraph();
       System.out.println("Nodes: " + diGraph.getNodeCount());
       System.out.println("Edges: " + diGraph.getEdgeCount());
 
-      for(i <- 0 to graphModel.getNodeTable.countColumns()-1) {
-        val col = graphModel.getNodeTable.getColumn(i)
-        println(col.getId)
-        println(diGraph.getNodes().toList(0).getAttribute(col))
-
+      for(node <- diGraph.getNodes) {
+        node.setLabel(node.getAttribute("node_label").toString)
       }
 
-
-      for(node <- diGraph.getNodes.toCollection.toList) {
-//        println(node.getAttribute("node_label"))
+      for(edge <- diGraph.getEdges) {
+        edge.setLabel(edge.getAttribute("edge_label").toString)
       }
 
       //Run YifanHuLayout for 100 passes - The layout always takes the current visible view
@@ -299,8 +272,9 @@ object GraphUtils {
       model.getProperties().putValue(PreviewProperty.EDGE_COLOR, new EdgeColor(java.awt.Color.GRAY));
       model.getProperties().putValue(PreviewProperty.EDGE_THICKNESS, 0.1f);
       model.getProperties().putValue(PreviewProperty.NODE_LABEL_FONT, model.getProperties().getFontValue(PreviewProperty.NODE_LABEL_FONT).deriveFont(8));
-//      model.getProperties.putValue(Item.NODE_LABEL, "vertex_label")
       model.getProperties.putValue(Item.NODE_LABEL, "Vertex Label")
+      model.getProperties().putValue(PreviewProperty.SHOW_EDGE_LABELS, true);
+      model.getProperties().putValue(PreviewProperty.NODE_LABEL_SHOW_BOX, false)
 
       for (item <- model.getItems(Item.NODE_LABEL)) {
         println(item)

@@ -56,10 +56,10 @@ object RuleDependencyGraphGenerator {
 
     // we re-use the JENA API for parsing rules
     val filename = "rdfs-simple.rules"
-    val rules = Rule.parseRules(org.apache.jena.reasoner.rulesys.Util.loadRuleParserFromResourceFile(filename))
+    val rules = Rule.parseRules(org.apache.jena.reasoner.rulesys.Util.loadRuleParserFromResourceFile(filename)).toSet
 
     // generate graph
-    val g = RuleDependencyGraphGenerator.generate(rules.toSet)
+    val g = RuleDependencyGraphGenerator.generate(rules)
 
     // check for cycles
     val cycle = g.findCycle
