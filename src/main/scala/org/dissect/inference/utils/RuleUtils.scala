@@ -7,11 +7,9 @@ import org.dissect.inference.rules.RuleEntailmentType
 import org.dissect.inference.rules.RuleEntailmentType._
 
 import scala.collection.JavaConversions._
-import scalax.collection.GraphEdge.DiEdge
+import scalax.collection.edge.Implicits._
 import scalax.collection.edge.LDiEdge
 import scalax.collection.mutable.Graph
-import scalax.collection.GraphPredef._
-import scalax.collection.edge.Implicits._
 
 /**
   * Utility class for rules.
@@ -213,9 +211,7 @@ object RuleUtils {
 
       // check if there is a path  ?s -> ?o2 in body such that there is at least one edge labeled with the same predicate
       isTC = path match {
-        case Some(value) => { // there is one edge labeled with p
-          !value.edges.filter(_.label.equals(edge.label)).toSeq.isEmpty
-        }
+        case Some(value) => value.edges.filter(_.label.equals(edge.label)).toSeq.nonEmpty
         case None => false
       }
     }
@@ -258,13 +254,11 @@ object RuleUtils {
     val ruleType = entailmentType(rule)
 
     // predicates contained in body
-    val bodyPredicates = rule.getBody
-      .collect { case b: TriplePattern => b }
+    val bodyPredicates = rule.bodyTriplePatterns()
       .map(tp => tp.getPredicate).toSet
 
     // predicates contained in head
-    val headPredicates = rule.getHead
-      .collect { case b: TriplePattern => b }
+    val headPredicates = rule.headTriplePatterns()
       .map(tp => tp.getPredicate).toSet
 
     // predicates that are contained in body and head
@@ -326,7 +320,8 @@ object RuleUtils {
   }
 
   /**
-    * Some convienece methods that can be called directly on a rule object.
+    * Some convenience methods that can be called directly on a rule object.
+    *
     * @param rule
     */
   implicit class RuleExtension(val rule: Rule) {

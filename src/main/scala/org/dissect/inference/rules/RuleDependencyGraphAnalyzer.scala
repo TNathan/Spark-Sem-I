@@ -30,7 +30,7 @@ object RuleDependencyGraphAnalyzer {
   def analyze(rules: Set[Rule]) : Unit = {
 
     // split into t-rules and a-rules first
-    val tRules = rules.filter(RuleUtils.isTerminological(_))
+    val tRules = rules.filter(RuleUtils.isTerminological)
 
     // generate the dependency graph for the t-rules
     val tRulesGraph = RuleDependencyGraphGenerator.generate(tRules)
@@ -52,7 +52,7 @@ object RuleDependencyGraphAnalyzer {
       }
     )
 
-    val aRules = rules.filter(RuleUtils.isAssertional(_))
+    val aRules = rules.filter(RuleUtils.isAssertional)
 
     // generate the dependency graph for the a-rules
     val aRulesGraph = RuleDependencyGraphGenerator.generate(aRules)
