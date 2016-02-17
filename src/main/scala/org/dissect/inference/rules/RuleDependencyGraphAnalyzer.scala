@@ -16,6 +16,7 @@ import scalax.collection.mutable.Graph
 import org.dissect.inference.utils.GraphUtils._
 import scalax.collection.connectivity.GraphComponents.graphToComponents
 import scala.reflect.runtime.universe._
+import org.dissect.inference.utils.RuleUtils.RuleExtension
 
 /**
   * @author Lorenz Buehmann
@@ -28,6 +29,15 @@ object RuleDependencyGraphAnalyzer {
     * @param rules the rules to analyze
     */
   def analyze(rules: Set[Rule]) : Unit = {
+
+    // check for rules with the same body
+    for(r1 <- rules; r2 <- rules) {
+      if(r1 != r2 && r1.sameBody(r2)) {
+        println("Same body: " + r1 + "\n" + r2)
+      }
+    }
+
+    println("Analyzing terminological rules...")
 
     // split into t-rules and a-rules first
     val tRules = rules.filter(RuleUtils.isTerminological)
@@ -51,6 +61,8 @@ object RuleDependencyGraphAnalyzer {
         println()
       }
     )
+
+    println("Analyzing assertional rules...")
 
     val aRules = rules.filter(RuleUtils.isAssertional)
 

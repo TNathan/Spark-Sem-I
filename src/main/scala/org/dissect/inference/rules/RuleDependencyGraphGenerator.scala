@@ -74,7 +74,6 @@ object RuleDependencyGraphGenerator {
         ret = true
       } else {
         if(tp1.getPredicate.isVariable && tp2.getPredicate.equals(RDFS.subPropertyOf.asNode())) {
-          println(rule1)
           ret = true
         }
       }

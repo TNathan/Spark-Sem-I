@@ -8,7 +8,7 @@ import com.itextpdf.text.PageSize
 import org.apache.jena.graph.Node
 import org.apache.jena.reasoner.rulesys.Rule
 import org.apache.jena.shared.PrefixMapping
-import org.apache.jena.shared.impl.PrefixMappingImpl
+import org.dissect.inference.utils.graph.{EdgeEquivalenceComparator, LabeledEdge, NodeEquivalenceComparator}
 import org.gephi.graph.api.GraphController
 import org.gephi.io.exporter.api.ExportController
 import org.gephi.io.exporter.preview.PDFExporter
@@ -20,6 +20,8 @@ import org.gephi.preview.api.{Item, PreviewController, PreviewProperty}
 import org.gephi.preview.types.EdgeColor
 import org.gephi.project.api.ProjectController
 import org.jgrapht.DirectedGraph
+import org.jgrapht.experimental.equivalence.EquivalenceComparator
+import org.jgrapht.experimental.isomorphism.AdaptiveIsomorphismInspectorFactory
 import org.jgrapht.ext._
 import org.jgrapht.graph.{DefaultDirectedGraph, DefaultEdge}
 import org.openide.util.Lookup
@@ -33,6 +35,44 @@ import scalax.collection.edge.LDiEdge
   *         created on 1/23/16
   */
 object GraphUtils {
+
+
+
+  def areIsomorphic(graph1: scalax.collection.mutable.Graph[Node, LDiEdge], graph2: scalax.collection.mutable.Graph[Node, LDiEdge]): Boolean = {
+    val g1 = asJGraphtGraph(graph1)
+    val g2 = asJGraphtGraph(graph2)
+
+    val c1 = new NodeEquivalenceComparator()
+    val c2 = new EdgeEquivalenceComparator()
+
+    val isoDetector = AdaptiveIsomorphismInspectorFactory.createIsomorphismInspector(
+      g1, g2, c1, c2)
+
+    isoDetector.isIsomorphic
+  }
+
+  /**
+    * Converts a 'Graph for Scala' graph to a JGraphT graph.
+    *
+    * @param graph the 'Graph for Scala' graph
+    * @return the JGraphT graph
+    */
+  def asJGraphtGraph(graph: scalax.collection.mutable.Graph[Node, LDiEdge]): DirectedGraph[Node, LabeledEdge] = {
+    val g: DirectedGraph[Node, LabeledEdge] = new DefaultDirectedGraph[Node, LabeledEdge](classOf[LabeledEdge])
+
+    val edges = graph.edges.toList
+
+    edges.foreach { e =>
+      val nodes = e.nodes.toList
+      val source = nodes(0)
+      val target = nodes(1)
+      g.addVertex(source)
+      g.addVertex(target)
+      g.addEdge(source, target, new LabeledEdge(e.label.toString))
+    }
+
+    g
+  }
 
   implicit class ClassRuleDependencyGraphExporter(val graph: scalax.collection.mutable.Graph[Rule, DiEdge]) {
     /**
@@ -243,8 +283,6 @@ object GraphUtils {
       //See if graph is well imported
       val graphModel = Lookup.getDefault().lookup(classOf[GraphController]).getGraphModel
       val diGraph = graphModel.getDirectedGraph();
-      System.out.println("Nodes: " + diGraph.getNodeCount());
-      System.out.println("Edges: " + diGraph.getEdgeCount());
 
       for(node <- diGraph.getNodes) {
         node.setLabel(node.getAttribute("node_label").toString)
@@ -294,8 +332,4 @@ object GraphUtils {
       new FileOutputStream(filename + ".pdf").write(baos.toByteArray())
     }
   }
-
-  class LabeledEdge(val label: String) extends DefaultEdge {
-  }
-
 }

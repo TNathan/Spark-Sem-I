@@ -338,6 +338,23 @@ object RuleUtils {
     def headTriplePatterns(): Seq[TriplePattern] = {
       return rule.getHead.collect { case b: TriplePattern => b }
     }
+
+    /**
+      * Returns `true` if the rule has the same body as the other rule, otherwise `false`.
+      */
+    def sameBody(otherRule: Rule): Boolean = {
+      GraphUtils.areIsomorphic(graphOfBody(rule), graphOfBody(otherRule))
+    }
+
+    /**
+      * Returns `true` if the rule has the same head as the other rule, otherwise `false`.
+      */
+    def sameHead(otherRule: Rule): Boolean = {
+      val triplePatterns = headTriplePatterns();
+      val otherTriplePatterns = otherRule.headTriplePatterns()
+
+      GraphUtils.areIsomorphic(graphOfHead(rule), graphOfHead(otherRule))
+    }
   }
 
 
