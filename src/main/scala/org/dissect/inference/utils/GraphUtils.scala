@@ -68,9 +68,23 @@ object GraphUtils {
       val target = nodes(1)
       g.addVertex(source)
       g.addVertex(target)
-      g.addEdge(source, target, new LabeledEdge(e.label.toString))
-    }
 
+      // check if there is an edge e1 such that l(e)=source(e1) || l(e)=target(e2)
+      // and if so set l(e)=l(e1)+"out"("in")
+      var label = e.label.toString
+      edges.foreach { e1 =>
+        val nodes = e1.nodes.toList
+        val source = nodes(0)
+        val target = nodes(1)
+
+        if(source.value.toString().equals(label)) {
+          label = e1.label.toString + "_in"
+        } else if(target.value.toString().equals(label)) {
+          label = e1.label.toString + "_out"
+        }
+      }
+      g.addEdge(source, target, new LabeledEdge(label))
+    }
     g
   }
 

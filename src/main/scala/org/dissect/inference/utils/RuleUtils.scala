@@ -320,6 +320,28 @@ object RuleUtils {
   }
 
   /**
+    * Returns `true` if `rule1 has the same body as `rule2`, otherwise `false`.
+    */
+  def sameBody(rule1: Rule, rule2: Rule): Boolean = {
+    GraphUtils.areIsomorphic(graphOfBody(rule1), graphOfBody(rule2))
+  }
+
+  /**
+    * Returns `true` if `rule1 has the same head as `rule2`, otherwise `false`.
+    */
+  def sameHead(rule1: Rule, rule2: Rule): Boolean = {
+    GraphUtils.areIsomorphic(graphOfHead(rule1), graphOfHead(rule2))
+  }
+
+  /**
+    * Returns `true` if `rule1` and `rule2` can be merged, i.e. both rules denote the same input but
+    * probably different output, otherwise `false`.
+    */
+  def canMerge(rule1: Rule, rule2: Rule): Boolean = {
+    sameBody(rule1, rule2)
+  }
+
+  /**
     * Some convenience methods that can be called directly on a rule object.
     *
     * @param rule
@@ -343,17 +365,14 @@ object RuleUtils {
       * Returns `true` if the rule has the same body as the other rule, otherwise `false`.
       */
     def sameBody(otherRule: Rule): Boolean = {
-      GraphUtils.areIsomorphic(graphOfBody(rule), graphOfBody(otherRule))
+      RuleUtils.sameBody(rule, otherRule)
     }
 
     /**
       * Returns `true` if the rule has the same head as the other rule, otherwise `false`.
       */
     def sameHead(otherRule: Rule): Boolean = {
-      val triplePatterns = headTriplePatterns();
-      val otherTriplePatterns = otherRule.headTriplePatterns()
-
-      GraphUtils.areIsomorphic(graphOfHead(rule), graphOfHead(otherRule))
+      RuleUtils.sameHead(rule, otherRule)
     }
   }
 
