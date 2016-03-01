@@ -33,48 +33,38 @@ object RuleDependencyGraphAnalyzer {
     // check for rules with the same body
     for(r1 <- rules; r2 <- rules) {
       if(r1 != r2 && r1.sameBody(r2)) {
-        println("Same body: " + r1 + "\n" + r2)
+        println("Same body:\n" + r1 + "\n" + r2)
       }
     }
 
-    println("Analyzing terminological rules...")
+    // split into t-rules, a-rules and h-rules first
 
-    // split into t-rules and a-rules first
+    println("\n" * 3 + "Analyzing terminological rules...")
     val tRules = rules.filter(RuleUtils.isTerminological)
+    computePlan(tRules)
 
-    // generate the dependency graph for the t-rules
-    val tRulesGraph = RuleDependencyGraphGenerator.generate(tRules)
+    println("\n" * 3 + "Analyzing assertional rules...")
+    val aRules = rules.filter(RuleUtils.isAssertional)
+    computePlan(aRules)
+
+    println("\n" * 3 + "Analyzing hybrid rules...")
+    val hRules = rules.filter(RuleUtils.isHybrid)
+    computePlan(hRules)
+
+    RuleDependencyGraphAnalyzer.analyze(RuleDependencyGraphGenerator.generate(tRules))
+
+  }
+
+  def computePlan(rules: Set[Rule]) : Unit = {
+    // generate the dependency graph
+    val graph = RuleDependencyGraphGenerator.generate(rules)
 
     // compute the strongly connected components DAG
-    val sccDag = GraphComponents.graphToComponents(tRulesGraph).stronglyConnectedComponentsDag
+    val sccDag = GraphComponents.graphToComponents(graph).stronglyConnectedComponentsDag
 
     // apply topological sort, i.e. we get layers of nodes where each node denotes a subgraph(i.e. set of rules)
     // and nodes in layer n have only predecessors in ancestor layers with at least one of them contained in layer n-1
     sccDag.topologicalSort.fold(
-      cycle => println("Cycle detected:" + cycle),
-      _.toLayered foreach { layer =>
-          println("---" * 3 + "layer " + layer._1 + "---" * 3)
-        layer._2.foreach(node => {
-          val subgraph = node.value
-          print("graph(" + subgraph.nodes.map(_.getName).mkString("|") + ")  ")
-        })
-        println()
-      }
-    )
-
-    println("Analyzing assertional rules...")
-
-    val aRules = rules.filter(RuleUtils.isAssertional)
-
-    // generate the dependency graph for the a-rules
-    val aRulesGraph = RuleDependencyGraphGenerator.generate(aRules)
-
-    // compute the strongly connected components DAG
-    val aRulesSccDag = GraphComponents.graphToComponents(aRulesGraph).stronglyConnectedComponentsDag
-
-    // apply topological sort, i.e. we get layers of nodes where each node denotes a subgraph(i.e. set of rules)
-    // and nodes in layer n have only predecessors in ancestor layers with at least one of them contained in layer n-1
-    aRulesSccDag.topologicalSort.fold(
       cycle => println("Cycle detected:" + cycle),
       _.toLayered foreach { layer =>
         println("---" * 3 + "layer " + layer._1 + "---" * 3)
@@ -85,9 +75,6 @@ object RuleDependencyGraphAnalyzer {
         println()
       }
     )
-
-    RuleDependencyGraphAnalyzer.analyze(tRulesGraph)
-
   }
 //
 //  def showLayers(topologicalOrder: GraphTraversal#LayeredTopologicalOrder[Graph[Rule, DiEdge]]) = {
