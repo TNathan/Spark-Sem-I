@@ -1,0 +1,197 @@
+package org.dissect.inference.forwardchaining
+
+import org.apache.jena.vocabulary.{OWL2, RDF, RDFS}
+import org.apache.spark.SparkContext
+import org.dissect.inference.data.RDFGraph
+import org.slf4j.LoggerFactory
+
+import scala.collection.mutable
+
+/**
+  * A forward chaining implementation of the OWL Horst entailment regime.
+  *
+  * @constructor create a new OWL Horst forward chaining reasoner
+  * @param sc the Apache Spark context
+  * @author Lorenz Buehmann
+  */
+class ForwardRuleReasonerOWLHorst(sc: SparkContext) extends ForwardRuleReasoner{
+
+  private val logger = com.typesafe.scalalogging.slf4j.Logger(LoggerFactory.getLogger(this.getClass.getName))
+
+  def apply(graph: RDFGraph): RDFGraph = {
+    logger.info("materializing graph...")
+    val startTime = System.currentTimeMillis()
+
+    val triplesRDD = graph.triples.cache() // we cache this RDD because it's used quite often
+
+    // RDFS rules dependency was analyzed in \todo(add references) and the same ordering is used here
+
+
+    // extract the schema data
+    val subClassOfTriples = extractTriples(triplesRDD, RDFS.subClassOf.getURI) // rdfs:subClassOf
+    val subPropertyOfTriples = extractTriples(triplesRDD, RDFS.subPropertyOf.getURI) // rdfs:subPropertyOf
+    val domainTriples = extractTriples(triplesRDD, RDFS.domain.getURI) // rdfs:domain
+    val rangeTriples = extractTriples(triplesRDD, RDFS.range.getURI) // rdfs:range
+
+
+    // 1. we first compute the transitive closure of rdfs:subPropertyOf and rdfs:subClassOf
+
+    /**
+      * rdfs11	xxx rdfs:subClassOf yyy .
+      * yyy rdfs:subClassOf zzz .	  xxx rdfs:subClassOf zzz .
+     */
+
+    val subClassOfTriplesTrans = computeTransitiveClosure(mutable.Set()++subClassOfTriples.collect())
+
+    /*
+        rdfs5	xxx rdfs:subPropertyOf yyy .
+              yyy rdfs:subPropertyOf zzz .	xxx rdfs:subPropertyOf zzz .
+     */
+
+    val subPropertyOfTriplesTrans = computeTransitiveClosure(extractTriples(mutable.Set()++subPropertyOfTriples.collect(), RDFS.subPropertyOf.getURI))
+
+
+    // we put all into maps which should be more efficient later on
+    val subClassOfMap = subClassOfTriplesTrans.map(t => (t._1, t._3)).toMap
+    val subPropertyMap = subPropertyOfTriplesTrans.map(t => (t._1, t._3)).toMap
+    val domainMap = domainTriples.map(t => (t._1, t._3)).collect.toMap
+    val rangeMap = rangeTriples.map(t => (t._1, t._3)).collect().toMap
+
+    // distribute the schema data structures by means of shared variables
+    // the assumption here is that the schema is usually much smaller than the instance data
+    val subClassOfMapBC = sc.broadcast(subClassOfMap)
+    val subPropertyMapBC = sc.broadcast(subPropertyMap)
+    val domainMapBC = sc.broadcast(domainMap)
+    val rangeMapBC = sc.broadcast(rangeMap)
+
+    // we also extract properties with certain OWL characteristic and share them
+    val transitivePropertiesBC = sc.broadcast(
+      extractTriples(triplesRDD, None, None, Some(OWL2.TransitiveProperty.getURI))
+        .map(triple => triple._1)
+        .collect())
+    val functionalPropertiesBC = sc.broadcast(
+      extractTriples(triplesRDD, None, None, Some(OWL2.FunctionalProperty.getURI))
+        .map(triple => triple._1)
+        .collect())
+    val inverseFunctionalPropertiesBC = sc.broadcast(
+      extractTriples(triplesRDD, None, None, Some(OWL2.InverseFunctionalProperty.getURI))
+        .map(triple => triple._1)
+        .collect())
+    val symmetricPropertiesBC = sc.broadcast(
+      extractTriples(triplesRDD, None, None, Some(OWL2.SymmetricProperty.getURI))
+        .map(triple => triple._1)
+        .collect())
+
+    // and inverse property definitions
+    val inverseOfMapBC = sc.broadcast(
+      extractTriples(triplesRDD, None, Some(OWL2.inverseOf.getURI), None)
+        .map(triple => (triple._1, triple._3))
+        .collect()
+    )
+
+    // and more OWL vocabulary used in property restrictions
+    val someValuesFromMapBC = sc.broadcast(
+      extractTriples(triplesRDD, None, Some(OWL2.someValuesFrom.getURI), None)
+        .map(triple => (triple._1, triple._3))
+        .collect()
+    )
+    val allValuesFromMapBC = sc.broadcast(
+      extractTriples(triplesRDD, None, Some(OWL2.allValuesFrom.getURI), None)
+        .map(triple => (triple._1, triple._3))
+        .collect()
+    )
+    val hasValueMapBC = sc.broadcast(
+      extractTriples(triplesRDD, None, Some(OWL2.hasValue.getURI), None)
+        .map(triple => (triple._1, triple._3))
+        .collect()
+    )
+    val onPropertyMapBC = sc.broadcast(
+      extractTriples(triplesRDD, None, Some(OWL2.onProperty.getURI), None)
+        .map(triple => (triple._1, triple._3))
+        .collect()
+    )
+
+
+    // owl:sameAs is computed separately, thus, we split the data
+    val triplesFiltered = triplesRDD.filter(triple => triple._2 != OWL2.sameAs.getURI && triple._2 == RDF.`type`.getURI)
+    val sameAsTriples = triplesRDD.filter(triple => triple._2 == OWL2.sameAs.getURI)
+    val typeTriples = triplesRDD.filter(triple => triple._2 == RDF.`type`.getURI)
+
+    val newDataInferred = true
+
+    while(newDataInferred) {
+      // 2. SubPropertyOf inheritance according to rdfs7 is computed
+
+      /*
+        rdfs7	aaa rdfs:subPropertyOf bbb .
+              xxx aaa yyy .                   	xxx bbb yyy .
+       */
+      val triplesRDFS7 =
+        triplesFiltered
+          .filter(t => subPropertyMapBC.value.contains(t._2))
+          .map(t => (t._1, subPropertyMapBC.value(t._2), t._3))
+
+      // add the inferred triples to the existing triples
+      val rdfs7Res = triplesRDFS7.union(triplesFiltered)
+
+      // 3. Domain and Range inheritance according to rdfs2 and rdfs3 is computed
+
+      /*
+      rdfs2	aaa rdfs:domain xxx .
+            yyy aaa zzz .	          yyy rdf:type xxx .
+       */
+      val triplesRDFS2 =
+        rdfs7Res
+          .filter(t => domainMapBC.value.contains(t._2))
+          .map(t => (t._1, RDF.`type`.getURI, domainMapBC.value(t._2)))
+
+      /*
+     rdfs3	aaa rdfs:range xxx .
+           yyy aaa zzz .	          zzz rdf:type xxx .
+      */
+      val triplesRDFS3 =
+        rdfs7Res
+          .filter(t => rangeMapBC.value.contains(t._2))
+          .map(t => (t._3, RDF.`type`.getURI, rangeMapBC.value(t._2)))
+
+
+      // 4. SubClass inheritance according to rdfs9
+      // input are the rdf:type triples from RDFS2/RDFS3 and the ones contained in the original graph
+
+      /*
+      rdfs9	xxx rdfs:subClassOf yyy .
+            zzz rdf:type xxx .	        zzz rdf:type yyy .
+       */
+      val triplesRDFS9 =
+        triplesRDFS2
+          .union(triplesRDFS3)
+          .union(typeTriples)
+          .filter(t => subClassOfMapBC.value.contains(t._3)) // such that A has a super class B
+          .map(t => (t._1, RDF.`type`.getURI, subClassOfMapBC.value(t._3))) // create triple (s a B)
+
+
+      // cls-hv1: ,(?R owl:hasValue ?V),(?R owl:onProperty ?P),(?X rdf:type ?R ) -> (?X ?P ?V )
+      val triplesClsHv1 = typeTriples
+        .filter(triple =>
+          hasValueMapBC.value.contains(triple._3) &&
+          onPropertyMapBC.value.contains(triple._3) &&
+        onPropertyMapBC.co) // (?R owl:hasValue ?V)
+
+    }
+
+
+
+
+
+
+
+
+    // 5. merge triples and remove duplicates
+    val allTriples = triplesRDFS2 union triplesRDFS3 union triplesRDFS7 union triplesRDFS9 distinct()
+
+    logger.info("...finished materialization in " + (System.currentTimeMillis() - startTime) + "ms.")
+
+    // return graph with inferred triples
+    new RDFGraph(allTriples)
+  }
+}

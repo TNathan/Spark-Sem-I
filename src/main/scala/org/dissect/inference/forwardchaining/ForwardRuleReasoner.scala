@@ -110,4 +110,34 @@ trait ForwardRuleReasoner {
     triples.filter(triple => triple._2 == predicate)
   }
 
+  /**
+    * Extracts all triples that match the given subject, predicate and object if defined.
+    *
+    * @param triples the RDD of triples
+    * @param subject the subject
+    * @param predicate the predicate
+    * @param obj the object
+    * @return the RDD of triples that match
+    */
+  def extractTriples(triples: RDD[(String, String, String)],
+                     subject: Option[String],
+                     predicate: Option[String],
+                     obj: Option[String]): RDD[(String, String, String)] = {
+    var extractedTriples = triples
+
+    if(subject.isDefined) {
+      extractedTriples = extractedTriples.filter(triple => triple._1 == subject.get)
+    }
+
+    if(predicate.isDefined) {
+      extractedTriples = extractedTriples.filter(triple => triple._2 == predicate.get)
+    }
+
+    if(obj.isDefined) {
+      extractedTriples = extractedTriples.filter(triple => triple._3 == obj.get)
+    }
+
+    extractedTriples
+  }
+
 }
