@@ -2,7 +2,8 @@ package org.dissect.inference.forwardchaining
 
 import org.apache.jena.vocabulary.{OWL2, RDF, RDFS}
 import org.apache.spark.SparkContext
-import org.dissect.inference.data.RDFGraph
+import org.apache.spark.rdd.RDD
+import org.dissect.inference.data.{RDFTriple, RDFGraph}
 import org.slf4j.LoggerFactory
 
 import scala.collection.mutable
@@ -100,11 +101,17 @@ class ForwardRuleReasonerOWLHorst(sc: SparkContext) extends ForwardRuleReasoner{
         .collect()
         .toMap
     )
+    val someValuesFromMapReversedBC = sc.broadcast(
+      someValuesFromMapBC.value.map(_.swap)
+    )
     val allValuesFromMapBC = sc.broadcast(
       extractTriples(triplesRDD, None, Some(OWL2.allValuesFrom.getURI), None)
         .map(triple => (triple._1, triple._3))
         .collect()
         .toMap
+    )
+    val allValuesFromMapReversedBC = sc.broadcast(
+      allValuesFromMapBC.value.map(_.swap)
     )
     val hasValueMapBC = sc.broadcast(
       extractTriples(triplesRDD, None, Some(OWL2.hasValue.getURI), None)
@@ -247,28 +254,70 @@ class ForwardRuleReasonerOWLHorst(sc: SparkContext) extends ForwardRuleReasoner{
         .map(triple => (triple._3, triple._2, triple._1))
 
       // rdfp15: (?R owl:someValuesFrom ?D), (?R owl:onProperty ?P), (?X ?P ?A), (?A rdf:type ?D ) -> (?X rdf:type ?R )
-      val rdfp15 = triplesFiltered
-        .filter(triple => onPropertyMapReversedBC.value.contains(triple._2))// && someValuesFromMapBC.value.contains(onPropertyMapReversedBC.value(triple._2)))
-          .map(triple => ((onPropertyMapReversedBC.value(triple._2), triple._3), triple._1))
+      val rdfp15_1 = triplesFiltered
+        .filter(triple => onPropertyMapReversedBC.value.contains(triple._2)) // && someValuesFromMapBC.value.contains(onPropertyMapReversedBC.value(triple._2)))
+        .map(triple => {
+          val restrictions = onPropertyMapReversedBC.value(triple._2)
+          restrictions.map(_r => ((_r -> triple._3), triple._1)) // -> ((?R, ?A), ?X)
+         })
+        .flatMap(identity)
+
+      val rdfp15_2 = typeTriples
+        .filter(triple => someValuesFromMapReversedBC.value.contains(triple._3))
+        .map(triple => ((someValuesFromMapReversedBC.value(triple._3), triple._1), Nil)) // -> ((?R, ?A), NIL)
+
+      val rdfp15 = rdfp15_1
+        .join(rdfp15_2)
+        .map(e => (e._2._1, RDF.`type`.getURI, e._1._1)) // -> (?X rdf:type ?R )
+
+
+      // rdfp16: (?R owl:allValuesFrom ?D), (?R owl:onProperty ?P), (?X ?P ?Y), (?X rdf:type ?R ) -> (?Y rdf:type ?D )
+      val rdfp16_1 = triplesFiltered // (?X ?P ?Y)
+        .filter(triple => onPropertyMapReversedBC.value.contains(triple._2) &&
+                          allValuesFromMapBC.value.keySet.intersect(onPropertyMapReversedBC.value(triple._2).toSet).nonEmpty) // (?R owl:allValuesFrom ?D), (?R owl:onProperty ?P)
+//        .map(triple => ((triple._1, on)))
+
+      val rdfp16_2 = typeTriples // (?X rdf:type ?R )
+        .filter(triple => allValuesFromMapBC.value.contains(triple._3) && onPropertyMapBC.value.contains(triple._3)) // (?R owl:allValuesFrom ?D), (?R owl:onProperty ?P)
+        .map(triple => ((triple._1, onPropertyMapBC.value(triple._3)), allValuesFromMapBC.value(triple._3))) // -> ((?X, ?R), ?D)
+
+      val rdfp16 = rdfp15_1
+        .join(rdfp15_2)
+        .map(e => (e._2._1, RDF.`type`.getURI, e._1._1)) // -> (?X rdf:type ?R )
 
 
     }
 
-
-
-
-
-
-
-
-
-
-    // 5. merge triples and remove duplicates
-    val allTriples = triplesRDFS2 union triplesRDFS3 union triplesRDFS7 union triplesRDFS9 distinct()
-
     logger.info("...finished materialization in " + (System.currentTimeMillis() - startTime) + "ms.")
 
     // return graph with inferred triples
-    new RDFGraph(allTriples)
+    graph
+
+
+
+
+    // rdfp15: (?R owl:someValuesFrom ?D), (?R owl:onProperty ?P), (?X ?P ?A), (?A rdf:type ?D ) -> (?X rdf:type ?R )
+    def rdfp15(triples: RDD[RDFTriple]) : RDD[RDFTriple] = {
+
+      val rdfp15_1 = triples // (?X ?P ?A)
+        .filter(triple => onPropertyMapReversedBC.value.contains(triple.predicate)) // (?X ?P ?A), (?R owl:onProperty ?P)
+        .map(triple => {
+          val restrictions = onPropertyMapReversedBC.value(triple.predicate)
+          restrictions.map(_r => ((_r -> triple.`object`), triple.subject))
+         })
+        .flatMap(identity) // -> ((?R, ?A), ?X)
+
+      val rdfp15_2 = typeTriples // (?A rdf:type ?D )
+        .filter(triple => someValuesFromMapReversedBC.value.contains(triple._3)) // (?A rdf:type ?D ), (?R owl:someValuesFrom ?D)
+        .map(triple => ((someValuesFromMapReversedBC.value(triple._3), triple._1), Nil)) // -> ((?R, ?A), NIL)
+
+      val rdfp15 = rdfp15_1
+        .join(rdfp15_2)
+        .map(e => RDFTriple(e._2._1, RDF.`type`.getURI, e._1._1)) // -> (?X rdf:type ?R )
+
+      rdfp15
+    }
+
+
   }
 }
