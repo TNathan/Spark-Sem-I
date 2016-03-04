@@ -62,10 +62,10 @@
 	(?C rdfs:subPropertyOf ?D ), (?D rdfs:subPropertyOf ?C ) -> (?C owl:equivalentProperty ?D)]
 
 [rdfp14a:
-	(?R owl:hasValue ?V), (?R owl:onProperty ?P), (?U ?P ?W) -> (?U rdf:type ?V)]
+	(?R owl:hasValue ?V), (?R owl:onProperty ?P), (?U ?P ?V) -> (?U rdf:type ?R)]
 
 [rdfp14bx:
-	(?R owl:hasValue ?V), (?R owl:onProperty ?P), (?U ?P ?W) -> (?U ?P ?V)]
+	(?R owl:hasValue ?V), (?R owl:onProperty ?P), (?U rdf:type ?R) -> (?U ?P ?V)]
 
 [rdfp15:
 	(?R owl:someValuesFrom ?D), (?R owl:onProperty ?P), (?X ?P ?A), (?A rdf:type ?D ) -> (?X rdf:type ?R )]

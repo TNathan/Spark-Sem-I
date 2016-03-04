@@ -87,6 +87,10 @@ class ForwardRuleReasonerOWLHorst(sc: SparkContext) extends ForwardRuleReasoner{
       extractTriples(triplesRDD, None, Some(OWL2.inverseOf.getURI), None)
         .map(triple => (triple._1, triple._3))
         .collect()
+        .toMap
+    )
+    val inverseOfMapRevertedBC = sc.broadcast(
+      inverseOfMapBC.value.map(_.swap)
     )
 
     // and more OWL vocabulary used in property restrictions
@@ -94,21 +98,31 @@ class ForwardRuleReasonerOWLHorst(sc: SparkContext) extends ForwardRuleReasoner{
       extractTriples(triplesRDD, None, Some(OWL2.someValuesFrom.getURI), None)
         .map(triple => (triple._1, triple._3))
         .collect()
+        .toMap
     )
     val allValuesFromMapBC = sc.broadcast(
       extractTriples(triplesRDD, None, Some(OWL2.allValuesFrom.getURI), None)
         .map(triple => (triple._1, triple._3))
         .collect()
+        .toMap
     )
     val hasValueMapBC = sc.broadcast(
       extractTriples(triplesRDD, None, Some(OWL2.hasValue.getURI), None)
         .map(triple => (triple._1, triple._3))
         .collect()
+        .toMap
     )
     val onPropertyMapBC = sc.broadcast(
       extractTriples(triplesRDD, None, Some(OWL2.onProperty.getURI), None)
         .map(triple => (triple._1, triple._3))
         .collect()
+        .toMap
+    )
+    val onPropertyMapReversedBC = sc.broadcast(
+      onPropertyMapBC.value.groupBy(_._2).mapValues(_.keys)
+    )
+    val hasValueMapReversedBC = sc.broadcast(
+      hasValueMapBC.value.groupBy(_._2).mapValues(_.keys)
     )
 
 
@@ -170,14 +184,77 @@ class ForwardRuleReasonerOWLHorst(sc: SparkContext) extends ForwardRuleReasoner{
           .map(t => (t._1, RDF.`type`.getURI, subClassOfMapBC.value(t._3))) // create triple (s a B)
 
 
-      // cls-hv1: ,(?R owl:hasValue ?V),(?R owl:onProperty ?P),(?X rdf:type ?R ) -> (?X ?P ?V )
+      // rdfp14b: (?R owl:hasValue ?V),(?R owl:onProperty ?P),(?X rdf:type ?R ) -> (?X ?P ?V )
       val triplesClsHv1 = typeTriples
         .filter(triple =>
           hasValueMapBC.value.contains(triple._3) &&
-          onPropertyMapBC.value.contains(triple._3) &&
-        onPropertyMapBC.co) // (?R owl:hasValue ?V)
+          onPropertyMapBC.value.contains(triple._3)
+        )
+        .map(triple =>
+          (triple._1, onPropertyMapBC.value.get(triple._3), hasValueMapBC.value.get(triple._3))
+        )
+
+      // rdfp14a: (?R owl:hasValue ?V), (?R owl:onProperty ?P), (?U ?P ?V) -> (?U rdf:type ?R)
+      val triplesClsHv2 = rdfs7Res
+        .filter(triple => {
+          if (onPropertyMapReversedBC.value.contains(triple._2)) {
+            // there is any restriction R for property P
+
+            var valueRestrictionExists = false
+
+            onPropertyMapReversedBC.value(triple._2).foreach { restriction =>
+              if (hasValueMapBC.value.contains(restriction) && // R a hasValue restriction
+                hasValueMapBC.value(restriction) == triple._3) {
+                //  with value V
+                valueRestrictionExists = true
+              }
+
+            }
+            valueRestrictionExists
+          }
+          false
+        })
+        .map(triple => {
+
+          val s = triple._1
+          val p = RDF.`type`
+          var o = ""
+          onPropertyMapReversedBC.value(triple._2).foreach { restriction => // get the restriction R
+            if (hasValueMapBC.value.contains(restriction) && // R a hasValue restriction
+              hasValueMapBC.value(restriction) == triple._3) { //  with value V
+
+              o = restriction
+            }
+
+          }
+          (s, p, o)
+        }
+        )
+
+      // rdfp8a: (?P owl:inverseOf ?Q), (?X ?P ?Y) -> (?Y ?Q ?X)
+      val rdfp8a = triplesFiltered
+        .filter(triple => inverseOfMapBC.value.contains(triple._2))
+        .map(triple => (triple._3, inverseOfMapBC.value(triple._2), triple._1))
+
+      // rdfp8b: (?P owl:inverseOf ?Q), (?X ?Q ?Y) -> (?Y ?P ?X)
+      val rdfp8b = triplesFiltered
+        .filter(triple => inverseOfMapRevertedBC.value.contains(triple._2))
+        .map(triple => (triple._3, inverseOfMapRevertedBC.value(triple._2), triple._1))
+
+      // rdfp3: (?P rdf:type owl:SymmetricProperty), (?X ?P ?Y) -> (?Y ?P ?X)
+      val rdfp3 = triplesFiltered
+        .filter(triple => symmetricPropertiesBC.value.contains(triple._2))
+        .map(triple => (triple._3, triple._2, triple._1))
+
+      // rdfp15: (?R owl:someValuesFrom ?D), (?R owl:onProperty ?P), (?X ?P ?A), (?A rdf:type ?D ) -> (?X rdf:type ?R )
+      val rdfp15 = triplesFiltered
+        .filter(triple => onPropertyMapReversedBC.value.contains(triple._2))// && someValuesFromMapBC.value.contains(onPropertyMapReversedBC.value(triple._2)))
+          .map(triple => ((onPropertyMapReversedBC.value(triple._2), triple._3), triple._1))
+
 
     }
+
+
 
 
 
