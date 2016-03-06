@@ -20,7 +20,7 @@ object RDFGraphLoader {
     val triples =
       sc.textFile(path, minPartitions)
         .map(line => line.replace(">", "").replace("<", "").split("\\s+")) // line to tokens
-        .map(tokens => (tokens(0), tokens(1), tokens(2))) // tokens to triple
+        .map(tokens => RDFTriple(tokens(0), tokens(1), tokens(2))) // tokens to triple
 
     logger.info("finished loading " + triples.count() + " triples in " + (System.currentTimeMillis()-startTime) + "ms.")
     new RDFGraph(triples)

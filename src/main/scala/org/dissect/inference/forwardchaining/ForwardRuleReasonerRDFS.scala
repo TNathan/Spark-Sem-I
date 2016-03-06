@@ -2,7 +2,7 @@ package org.dissect.inference.forwardchaining
 
 import org.apache.jena.vocabulary.{RDF, RDFS}
 import org.apache.spark.SparkContext
-import org.dissect.inference.data.RDFGraph
+import org.dissect.inference.data.{RDFGraph, RDFTriple}
 import org.slf4j.LoggerFactory
 
 import scala.collection.mutable
@@ -12,7 +12,6 @@ import scala.collection.mutable
   *
   * @constructor create a new RDFS forward chaining reasoner
   * @param sc the Apache Spark context
-  *
   * @author Lorenz Buehmann
   */
 class ForwardRuleReasonerRDFS(sc: SparkContext) extends ForwardRuleReasoner{
@@ -33,8 +32,8 @@ class ForwardRuleReasonerRDFS(sc: SparkContext) extends ForwardRuleReasoner{
 
 
     /**
-        rdfs11	xxx rdfs:subClassOf yyy .
-                yyy rdfs:subClassOf zzz .	  xxx rdfs:subClassOf zzz .
+      * rdfs11	xxx rdfs:subClassOf yyy .
+      * yyy rdfs:subClassOf zzz .	  xxx rdfs:subClassOf zzz .
      */
     val subClassOfTriples = extractTriples(triplesRDD, RDFS.subClassOf.getURI) // extract rdfs:subClassOf triples
     val subClassOfTriplesTrans = computeTransitiveClosure(mutable.Set()++subClassOfTriples.collect())
@@ -47,8 +46,8 @@ class ForwardRuleReasonerRDFS(sc: SparkContext) extends ForwardRuleReasoner{
     val subPropertyOfTriplesTrans = computeTransitiveClosure(extractTriples(mutable.Set()++subPropertyOfTriples.collect(), RDFS.subPropertyOf.getURI))
 
     // a map structure should be more efficient
-    val subClassOfMap = subClassOfTriplesTrans.map(t => (t._1, t._3)).toMap
-    val subPropertyMap = subPropertyOfTriplesTrans.map(t => (t._1, t._3)).toMap
+    val subClassOfMap = subClassOfTriplesTrans.map(t => (t.subject, t.`object`)).toMap
+    val subPropertyMap = subPropertyOfTriplesTrans.map(t => (t.subject, t.`object`)).toMap
 
     // distribute the schema data structures by means of shared variables
     // the assumption here is that the schema is usually much smaller than the instance data
@@ -63,8 +62,8 @@ class ForwardRuleReasonerRDFS(sc: SparkContext) extends ForwardRuleReasoner{
      */
     val triplesRDFS7 =
       triplesRDD
-      .filter(t => subPropertyMapBC.value.contains(t._2))
-      .map(t => (t._1, subPropertyMapBC.value(t._2), t._3))
+      .filter(t => subPropertyMapBC.value.contains(t.predicate))
+      .map(t => RDFTriple(t.subject, subPropertyMapBC.value(t.predicate), t.`object`))
 
     // 3. Domain and Range inheritance according to rdfs2 and rdfs3 is computed
 
@@ -73,26 +72,26 @@ class ForwardRuleReasonerRDFS(sc: SparkContext) extends ForwardRuleReasoner{
           yyy aaa zzz .	          yyy rdf:type xxx .
      */
     val domainTriples = extractTriples(triplesRDD, RDFS.domain.getURI)
-    val domainMap = domainTriples.map(t => (t._1, t._3)).collect.toMap
+    val domainMap = domainTriples.map(t => (t.subject, t.`object`)).collect.toMap
     val domainMapBC = sc.broadcast(domainMap)
 
     val triplesRDFS2 =
       triplesRDD
-        .filter(t => domainMapBC.value.contains(t._2))
-        .map(t => (t._1, RDF.`type`.getURI, domainMapBC.value(t._2)))
+        .filter(t => domainMapBC.value.contains(t.predicate))
+        .map(t => RDFTriple(t.subject, RDF.`type`.getURI, domainMapBC.value(t.predicate)))
 
     /*
    rdfs3	aaa rdfs:range xxx .
          yyy aaa zzz .	          zzz rdf:type xxx .
     */
     val rangeTriples = extractTriples(triplesRDD, RDFS.range.getURI)
-    val rangeMap = rangeTriples.map(t => (t._1, t._3)).collect().toMap
+    val rangeMap = rangeTriples.map(t => (t.subject, t.`object`)).collect().toMap
     val rangeMapBC = sc.broadcast(rangeMap)
 
     val triplesRDFS3 =
       triplesRDD
-        .filter(t => rangeMapBC.value.contains(t._2))
-        .map(t => (t._3, RDF.`type`.getURI, rangeMapBC.value(t._2)))
+        .filter(t => rangeMapBC.value.contains(t.predicate))
+        .map(t => RDFTriple(t.subject, RDF.`type`.getURI, rangeMapBC.value(t.predicate)))
 
 
     // 4. SubClass inheritance according to rdfs9
@@ -103,9 +102,9 @@ class ForwardRuleReasonerRDFS(sc: SparkContext) extends ForwardRuleReasoner{
      */
     val triplesRDFS9 =
       triplesRDD
-        .filter(t => t._2 == RDF.`type`.getURI) // all rdf:type triples (s a A)
-        .filter(t => subClassOfMapBC.value.contains(t._3)) // such that A has a super class B
-        .map(t => (t._1, RDF.`type`.getURI, subClassOfMapBC.value(t._3))) // create triple (s a B)
+        .filter(t => t.predicate == RDF.`type`.getURI) // all rdf:type triples (s a A)
+        .filter(t => subClassOfMapBC.value.contains(t.`object`)) // such that A has a super class B
+        .map(t => RDFTriple(t.subject, RDF.`type`.getURI, subClassOfMapBC.value(t.`object`))) // create triple (s a B)
 
 
     // 5. merge triples and remove duplicates

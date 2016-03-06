@@ -8,6 +8,6 @@ import org.apache.spark.rdd.RDD
   * @author Lorenz Buehmann
   *
   */
-case class RDFGraph (triples: RDD[(String, String, String)]) {
+case class RDFGraph (triples: RDD[RDFTriple]) {
 
 }

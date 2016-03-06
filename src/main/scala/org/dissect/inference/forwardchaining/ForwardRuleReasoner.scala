@@ -1,11 +1,9 @@
 package org.dissect.inference.forwardchaining
 
 import org.apache.spark.rdd.RDD
-import org.dissect.inference.data.{RDFTriple, RDFGraph}
+import org.dissect.inference.data.{RDFGraph, RDFTriple}
 
 import scala.collection.mutable
-import org.apache.spark.SparkContext._
-
 import scala.reflect.ClassTag
 
 /**
@@ -24,14 +22,24 @@ trait ForwardRuleReasoner {
     */
   def apply(graph: RDFGraph) : RDFGraph
 
-  def computeTransitiveClosure[A, B, C](s: mutable.Set[(A, B, C)]): mutable.Set[(A, B, C)] = {
+//  def computeTransitiveClosure[A, B, C](s: mutable.Set[(A, B, C)]): mutable.Set[(A, B, C)] = {
+//    val t = addTransitive(s)
+//    // recursive call if set changed, otherwise stop and return
+//    if (t.size == s.size) s else computeTransitiveClosure(t)
+//  }
+
+  def computeTransitiveClosure(s: mutable.Set[RDFTriple]): mutable.Set[RDFTriple] = {
     val t = addTransitive(s)
     // recursive call if set changed, otherwise stop and return
     if (t.size == s.size) s else computeTransitiveClosure(t)
   }
 
-  def addTransitive[A, B, C](s: mutable.Set[(A, B, C)]) = {
-    s ++ (for ((s1, p1, o1) <- s; (s2, p2, o2) <- s if o1 == s2) yield (s1, p1, o2))
+//  def addTransitive[A, B, C](s: mutable.Set[(A, B, C)]) = {
+//    s ++ (for ((s1, p1, o1) <- s; (s2, p2, o2) <- s if o1 == s2) yield (s1, p1, o2))
+//  }
+
+  def addTransitive(s: mutable.Set[RDFTriple]) = {
+    s ++ (for (t1 <- s; t2 <- s if t1.`object` == t2.subject) yield RDFTriple(t1.subject, t1.predicate, t2.`object`))
   }
 
   def computeTransitiveClosure(triples: RDD[RDFTriple]): RDD[RDFTriple] = {
@@ -39,7 +47,7 @@ trait ForwardRuleReasoner {
     val predicate = triples.take(1)(0).predicate
 
     // compute the TC
-    var subjectObjectPairs = triples.map(t => (t.subject, t.obj)).cache()
+    var subjectObjectPairs = triples.map(t => (t.subject, t.`object`)).cache()
 
     // because join() joins on keys, in addition the pairs are stored in reversed order (o, s)
     val objectSubjectPairs = subjectObjectPairs.map(t => (t._2, t._1))
@@ -95,8 +103,8 @@ trait ForwardRuleReasoner {
     * @param predicate the predicate
     * @return the set of triples that contain the predicate
     */
-  def extractTriples(triples: mutable.Set[(String, String, String)], predicate: String): mutable.Set[(String, String, String)] = {
-    triples.filter(triple => triple._2 == predicate)
+  def extractTriples(triples: mutable.Set[RDFTriple], predicate: String): mutable.Set[RDFTriple] = {
+    triples.filter(triple => triple.predicate == predicate)
   }
 
   /**
@@ -106,8 +114,8 @@ trait ForwardRuleReasoner {
     * @param predicate the predicate
     * @return the RDD of triples that contain the predicate
     */
-  def extractTriples(triples: RDD[(String, String, String)], predicate: String): RDD[(String, String, String)] = {
-    triples.filter(triple => triple._2 == predicate)
+  def extractTriples(triples: RDD[RDFTriple], predicate: String): RDD[RDFTriple] = {
+    triples.filter(triple => triple.predicate == predicate)
   }
 
   /**
@@ -119,22 +127,22 @@ trait ForwardRuleReasoner {
     * @param obj the object
     * @return the RDD of triples that match
     */
-  def extractTriples(triples: RDD[(String, String, String)],
+  def extractTriples(triples: RDD[RDFTriple],
                      subject: Option[String],
                      predicate: Option[String],
-                     obj: Option[String]): RDD[(String, String, String)] = {
+                     obj: Option[String]): RDD[RDFTriple] = {
     var extractedTriples = triples
 
     if(subject.isDefined) {
-      extractedTriples = extractedTriples.filter(triple => triple._1 == subject.get)
+      extractedTriples = extractedTriples.filter(triple => triple.subject == subject.get)
     }
 
     if(predicate.isDefined) {
-      extractedTriples = extractedTriples.filter(triple => triple._2 == predicate.get)
+      extractedTriples = extractedTriples.filter(triple => triple.predicate == predicate.get)
     }
 
     if(obj.isDefined) {
-      extractedTriples = extractedTriples.filter(triple => triple._3 == obj.get)
+      extractedTriples = extractedTriples.filter(triple => triple.`object` == obj.get)
     }
 
     extractedTriples

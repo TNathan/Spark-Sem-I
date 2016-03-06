@@ -1,7 +1,7 @@
 package org.dissect.inference
 
 import org.apache.spark.{SparkConf, SparkContext}
-import org.dissect.inference.data.{RDFGraph, RDFGraphWriter, RDFGraphLoader}
+import org.dissect.inference.data.{RDFTriple, RDFGraph, RDFGraphWriter, RDFGraphLoader}
 import org.dissect.inference.forwardchaining.{ForwardRuleReasonerNaive, ForwardRuleReasonerRDFS}
 import org.dissect.inference.utils.RuleUtils
 
@@ -53,8 +53,8 @@ object RDFGraphMaterializer {
 //    conf.set("spark.eventLog.enabled", "true")
     val sc = new SparkContext(conf)
 
-    val triples = new mutable.HashSet[(String, String, String)]()
-    triples.add("s", "p", "o")
+    val triples = new mutable.HashSet[RDFTriple]()
+    triples.add(RDFTriple("s", "p", "o"))
 
     val triplesRDD = sc.parallelize(triples.toSeq, 2)
 
