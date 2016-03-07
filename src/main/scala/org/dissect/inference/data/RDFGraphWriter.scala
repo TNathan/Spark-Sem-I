@@ -17,8 +17,8 @@ object RDFGraphWriter {
     val startTime  = System.currentTimeMillis()
 
     graph.triples
-      .map(t => "<" + t._1 + "> <" + t._2 + "> <" + t._3 + "> .") // to N-TRIPLES string
-//      .coalesce(8)
+      .map(t => "<" + t.subject + "> <" + t.predicate + "> <" + t.`object` + "> .") // to N-TRIPLES string
+      .coalesce(1)
       .saveAsTextFile(path)
 
     logger.info("finished writing triples to disk in " + (System.currentTimeMillis()-startTime) + "ms.")

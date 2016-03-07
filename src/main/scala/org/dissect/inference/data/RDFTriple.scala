@@ -8,7 +8,7 @@ package org.dissect.inference.data
 case class RDFTriple(subject: String, predicate: String, `object`: String) extends Product3[String, String, String] {
   override def _1: String = subject
 
-  override def _3: String = predicate
+  override def _2: String = predicate
 
-  override def _2: String = `object`
+  override def _3: String = `object`
 }

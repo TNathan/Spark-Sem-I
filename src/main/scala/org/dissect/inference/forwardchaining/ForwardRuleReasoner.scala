@@ -43,6 +43,8 @@ trait ForwardRuleReasoner {
   }
 
   def computeTransitiveClosure(triples: RDD[RDFTriple]): RDD[RDFTriple] = {
+    if(triples.isEmpty()) return triples
+
     // keep the predicate
     val predicate = triples.take(1)(0).predicate
 

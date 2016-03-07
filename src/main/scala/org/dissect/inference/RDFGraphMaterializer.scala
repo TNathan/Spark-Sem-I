@@ -1,11 +1,8 @@
 package org.dissect.inference
 
 import org.apache.spark.{SparkConf, SparkContext}
-import org.dissect.inference.data.{RDFTriple, RDFGraph, RDFGraphWriter, RDFGraphLoader}
-import org.dissect.inference.forwardchaining.{ForwardRuleReasonerNaive, ForwardRuleReasonerRDFS}
-import org.dissect.inference.utils.RuleUtils
-
-import scala.collection.mutable
+import org.dissect.inference.data.{RDFGraphLoader, RDFGraphWriter}
+import org.dissect.inference.forwardchaining.ForwardRuleReasonerRDFS
 
 /**
   * The class to compute the RDFS materialization of a given RDF graph.
@@ -16,64 +13,33 @@ import scala.collection.mutable
 object RDFGraphMaterializer {
 
 
-//  def main(args: Array[String]) {
-//
-//    if (args.length < 2) {
-//      System.err.println("Usage: RDFGraphMaterializer <sourceFile> <targetFile>")
-//      System.exit(1)
-//    }
-//
-//    // the SPARK config
-//    val conf = new SparkConf().setAppName("SPARK Reasoning")
-//    conf.set("spark.hadoop.validateOutputSpecs", "false")
-//    conf.setMaster("local[2]")
-//    conf.set("spark.eventLog.enabled", "true")
-//    val sc = new SparkContext(conf)
-//
-//    // load triples from disk
-//    val graph = RDFGraphLoader.loadFromFile(args(0), sc, 2)
-//
-//    // create reasoner
-//    val reasoner = new ForwardRuleReasonerRDFS(sc)
-//
-//    // compute inferred graph
-//    val inferredGraph = reasoner.apply(graph)
-//
-//    // write triples to disk
-//    RDFGraphWriter.writeToFile(inferredGraph, args(1))
-//
-//    sc.stop()
-//  }
-
   def main(args: Array[String]) {
+
+    if (args.length < 2) {
+      System.err.println("Usage: RDFGraphMaterializer <sourceFile> <targetFile>")
+      System.exit(1)
+    }
+
     // the SPARK config
     val conf = new SparkConf().setAppName("SPARK Reasoning")
     conf.set("spark.hadoop.validateOutputSpecs", "false")
     conf.setMaster("local[2]")
-//    conf.set("spark.eventLog.enabled", "true")
+    conf.set("spark.eventLog.enabled", "true")
     val sc = new SparkContext(conf)
 
-    val triples = new mutable.HashSet[RDFTriple]()
-    triples.add(RDFTriple("s", "p", "o"))
+    // load triples from disk
+    val graph = RDFGraphLoader.loadFromFile(args(0), sc, 2)
 
-    val triplesRDD = sc.parallelize(triples.toSeq, 2)
+    // create reasoner
+    val reasoner = new ForwardRuleReasonerRDFS(sc)
 
-    val graph = new RDFGraph(triplesRDD)
+    // compute inferred graph
+    val inferredGraph = reasoner.apply(graph)
 
-    val filenames = List(
-      "rules/rdfs-simple.rules"
-    )
+    // write triples to disk
+    RDFGraphWriter.writeToFile(inferredGraph, args(1))
 
-    filenames.foreach { filename =>
-      println(filename)
-
-      // parse the rules
-      val rules = RuleUtils.load(filename).toSet
-
-      val reasoner = new ForwardRuleReasonerNaive(sc, rules)
-
-      reasoner.apply(graph)
-    }
-
+    sc.stop()
   }
+
 }

@@ -2,7 +2,7 @@ package org.dissect.inference.forwardchaining
 
 import org.apache.jena.vocabulary.{OWL2, RDF, RDFS}
 import org.apache.spark.SparkContext
-import org.apache.spark.rdd.RDD
+import org.apache.spark.rdd.{UnionRDD, RDD}
 import org.dissect.inference.data.{RDFGraph, RDFTriple}
 import org.slf4j.LoggerFactory
 
@@ -15,7 +15,9 @@ import scala.collection.mutable
   * @param sc the Apache Spark context
   * @author Lorenz Buehmann
   */
-class ForwardRuleReasonerOWLHorst(sc: SparkContext) extends ForwardRuleReasoner{
+class ForwardRuleReasonerOWLHorst(sc: SparkContext, parallelism: Int) extends ForwardRuleReasoner{
+
+  def this(sc: SparkContext) = this(sc, sc.defaultParallelism)
 
   private val logger = com.typesafe.scalalogging.slf4j.Logger(LoggerFactory.getLogger(this.getClass.getName))
 
@@ -126,21 +128,25 @@ class ForwardRuleReasonerOWLHorst(sc: SparkContext) extends ForwardRuleReasoner{
         .toMap
     )
     val onPropertyMapReversedBC = sc.broadcast(
-      onPropertyMapBC.value.groupBy(_._2).mapValues(_.keys)
+      onPropertyMapBC.value.groupBy(_._2).mapValues(_.keys).map(identity)
     )
     val hasValueMapReversedBC = sc.broadcast(
-      hasValueMapBC.value.groupBy(_._2).mapValues(_.keys)
+      hasValueMapBC.value.groupBy(_._2).mapValues(_.keys).map(identity)
     )
 
 
     // owl:sameAs is computed separately, thus, we split the data
-    val triplesFiltered = triplesRDD.filter(triple => triple.predicate != OWL2.sameAs.getURI && triple.predicate == RDF.`type`.getURI)
-    val sameAsTriples = triplesRDD.filter(triple => triple.predicate == OWL2.sameAs.getURI)
-    val typeTriples = triplesRDD.filter(triple => triple.predicate == RDF.`type`.getURI)
+    var triplesFiltered = triplesRDD.filter(triple => triple.predicate != OWL2.sameAs.getURI && triple.predicate != RDF.`type`.getURI)
+    var sameAsTriples = triplesRDD.filter(triple => triple.predicate == OWL2.sameAs.getURI)
+    var typeTriples = triplesRDD.filter(triple => triple.predicate == RDF.`type`.getURI)
 
-    val newDataInferred = true
+    var newDataInferred = true
+    var iteration = 0
 
     while(newDataInferred) {
+      iteration += 1
+      logger.info(iteration + ". iteration...")
+
       // 2. SubPropertyOf inheritance according to rdfs7 is computed
 
       /*
@@ -192,7 +198,7 @@ class ForwardRuleReasonerOWLHorst(sc: SparkContext) extends ForwardRuleReasoner{
 
 
       // rdfp14b: (?R owl:hasValue ?V),(?R owl:onProperty ?P),(?X rdf:type ?R ) -> (?X ?P ?V )
-      val triplesClsHv1 = typeTriples
+      val rdfp14b = typeTriples
         .filter(triple =>
           hasValueMapBC.value.contains(triple.`object`) &&
           onPropertyMapBC.value.contains(triple.`object`)
@@ -202,7 +208,7 @@ class ForwardRuleReasonerOWLHorst(sc: SparkContext) extends ForwardRuleReasoner{
         )
 
       // rdfp14a: (?R owl:hasValue ?V), (?R owl:onProperty ?P), (?U ?P ?V) -> (?U rdf:type ?R)
-      val triplesClsHv2 = rdfs7Res
+      val rdfp14a = rdfs7Res
         .filter(triple => {
           if (onPropertyMapReversedBC.value.contains(triple.predicate)) {
             // there is any restriction R for property P
@@ -224,7 +230,7 @@ class ForwardRuleReasonerOWLHorst(sc: SparkContext) extends ForwardRuleReasoner{
         .map(triple => {
 
           val s = triple.subject
-          val p = RDF.`type`
+          val p = RDF.`type`.getURI
           var o = ""
           onPropertyMapReversedBC.value(triple.predicate).foreach { restriction => // get the restriction R
             if (hasValueMapBC.value.contains(restriction) && // R a hasValue restriction
@@ -234,7 +240,7 @@ class ForwardRuleReasonerOWLHorst(sc: SparkContext) extends ForwardRuleReasoner{
             }
 
           }
-          (s, p, o)
+          RDFTriple(s, p, o)
         }
         )
 
@@ -268,7 +274,7 @@ class ForwardRuleReasonerOWLHorst(sc: SparkContext) extends ForwardRuleReasoner{
 
       val rdfp15 = rdfp15_1
         .join(rdfp15_2)
-        .map(e => (e._2._1, RDF.`type`.getURI, e._1._1)) // -> (?X rdf:type ?R )
+        .map(e => RDFTriple(e._2._1, RDF.`type`.getURI, e._1._1)) // -> (?X rdf:type ?R )
 
 
       // rdfp16: (?R owl:allValuesFrom ?D), (?R owl:onProperty ?P), (?X ?P ?Y), (?X rdf:type ?R ) -> (?Y rdf:type ?D )
@@ -287,16 +293,42 @@ class ForwardRuleReasonerOWLHorst(sc: SparkContext) extends ForwardRuleReasoner{
 
       val rdfp16 = rdfp16_1
         .join(rdfp16_2) // (?X, ?R), (?Y, ?D)
-        .map(e => (e._2._1, RDF.`type`.getURI, e._2._2)) // -> (?Y rdf:type ?D )
+        .map(e => RDFTriple(e._2._1, RDF.`type`.getURI, e._2._2)) // -> (?Y rdf:type ?D )
 
+      // deduplicate
+      val triplesNew = new UnionRDD(sc, Seq(triplesRDFS7, rdfp3, rdfp8a, rdfp8b, rdfp14b))
+        .distinct(parallelism)
+        .subtract(triplesFiltered, parallelism)
 
+      val tripleNewCnt = triplesNew.count
+
+      if(iteration == 1 || tripleNewCnt > 0) {
+        // add triples
+        triplesFiltered = triplesFiltered.union(triplesNew)
+
+        // rdfp4: (?P rdf:type owl:TransitiveProperty), (?X ?P ?Y), (?Y ?P ?Z) -> (?X ?P ?Z)
+        val rdfp4 = computeTransitiveClosure(triplesFiltered.filter(triple => transitivePropertiesBC.value.contains(triple.predicate)))
+
+        // add triples
+        triplesFiltered = triplesFiltered.union(rdfp4)
+      }
+
+      // deduplicate the computed rdf:type triples and check if new triples have been computed
+      val typeTriplesNew = new UnionRDD(sc, Seq(triplesRDFS2, triplesRDFS3, triplesRDFS9, rdfp14a))
+        .distinct(parallelism)
+        .subtract(typeTriples, parallelism)
+
+      val typeTriplesNewCnt = typeTriplesNew.count
+
+      if(typeTriplesNewCnt > 0) {
+        // add type triples
+        typeTriples = typeTriples.union(typeTriplesNew)
+      }
+
+      newDataInferred = typeTriplesNewCnt > 0 || typeTriplesNewCnt > 0
     }
 
     logger.info("...finished materialization in " + (System.currentTimeMillis() - startTime) + "ms.")
-
-
-
-
 
 
     // rdfp15: (?R owl:someValuesFrom ?D), (?R owl:onProperty ?P), (?X ?P ?A), (?A rdf:type ?D ) -> (?X rdf:type ?R )
@@ -322,6 +354,6 @@ class ForwardRuleReasonerOWLHorst(sc: SparkContext) extends ForwardRuleReasoner{
     }
 
     // return graph with inferred triples
-    graph
+    RDFGraph(typeTriples.union(triplesFiltered))
   }
 }
