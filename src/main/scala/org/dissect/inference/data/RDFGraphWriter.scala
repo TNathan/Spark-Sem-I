@@ -1,6 +1,8 @@
 package org.dissect.inference.data
 
+import org.dissect.inference.utils.RDFTripleOrdering
 import org.slf4j.LoggerFactory
+import org.apache.spark.SparkContext._
 
 /**
   * Writes an RDF graph to disk.
@@ -16,7 +18,9 @@ object RDFGraphWriter {
     logger.info("writing triples to disk...")
     val startTime  = System.currentTimeMillis()
 
-    graph.triples
+    implicit val ordering = RDFTripleOrdering
+
+    graph.triples.map(t=>(t,t)).sortByKey().map(_._1)
       .map(t => "<" + t.subject + "> <" + t.predicate + "> <" + t.`object` + "> .") // to N-TRIPLES string
       .coalesce(1)
       .saveAsTextFile(path)
