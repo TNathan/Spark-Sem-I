@@ -1,5 +1,9 @@
 package org.dissect.inference.data
 
+import java.io.ByteArrayInputStream
+import java.nio.charset.StandardCharsets
+
+import org.apache.jena.rdf.model.{Model, ModelFactory}
 import org.dissect.inference.utils.RDFTripleOrdering
 import org.slf4j.LoggerFactory
 import org.apache.spark.SparkContext._
@@ -26,5 +30,19 @@ object RDFGraphWriter {
       .saveAsTextFile(path)
 
     logger.info("finished writing triples to disk in " + (System.currentTimeMillis()-startTime) + "ms.")
+  }
+
+  def convertToModel(graph: RDFGraph) : Model = {
+    val modelString = graph.triples.map(t =>
+      "<" + t.subject + "> <" + t.predicate + "> <" + t.`object` + "> .") // to N-TRIPLES string
+      .collect().mkString("\n")
+
+    val model = ModelFactory.createDefaultModel()
+
+    if(!modelString.trim.isEmpty) {
+      model.read(new ByteArrayInputStream(modelString.getBytes(StandardCharsets.UTF_8)), null, "N-TRIPLES")
+    }
+
+    model
   }
 }
