@@ -63,6 +63,7 @@ trait ForwardRuleReasoner {
       // then project the result to obtain the new (s2, o1) paths.
       subjectObjectPairs = subjectObjectPairs
         .union(subjectObjectPairs.join(objectSubjectPairs).map(x => (x._2._2, x._2._1)))
+        .filter(tuple => tuple._1 != tuple._2) // omit (s1, s1)
         .distinct()
         .cache()
       nextCount = subjectObjectPairs.count()
