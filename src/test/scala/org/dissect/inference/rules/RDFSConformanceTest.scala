@@ -10,12 +10,12 @@ import org.scalatest.{BeforeAndAfterAll, FlatSpec}
 import scala.collection.mutable
 
 /**
-  * The class to compute the materialization of a given RDF graph.
+  * The class is to test the conformance of each materialization rule of RDFS(simple) entailment.
   *
   * @author Lorenz Buehmann
   *
   */
-class RDFConformanceTest extends FlatSpec with BeforeAndAfterAll {
+class RDFSConformanceTest extends FlatSpec with BeforeAndAfterAll {
 
   behavior of "comformance of RDFS(simple) entailment rules"
 
@@ -73,7 +73,7 @@ class RDFConformanceTest extends FlatSpec with BeforeAndAfterAll {
       // compare models, i.e. the inferred model should contain exactly the triples of the conclusion graph
       inferredModel.remove(testCase.inputGraph)
 
-      assert(inferredModel.isIsomorphicWith(testCase.outputGraph) == true)
+      assert(inferredModel.isIsomorphicWith(testCase.outputGraph))
     }
   }
 

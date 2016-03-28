@@ -18,11 +18,11 @@ object TestCases {
     * @param directory the root folder containing sub-folders for each test case
     * @return test cases
     */
-  def loadTestCases(directory: File): Seq[TestCase] = {
+  def loadTestCases(directory: File, ids: Set[String] = Set.empty): Seq[TestCase] = {
 
     val testCases = new ListBuffer[TestCase]()
 
-    directory.listFiles().filter(_.isDirectory).foreach { subDirectory =>
+    directory.listFiles().filter(f => f.isDirectory && (ids.isEmpty || ids.contains(f.getName))).foreach { subDirectory =>
 
       // the files in the directory
       val files = subDirectory.listFiles()
@@ -54,6 +54,6 @@ object TestCases {
       }
     }
 
-    testCases.toSeq
+    testCases
   }
 }

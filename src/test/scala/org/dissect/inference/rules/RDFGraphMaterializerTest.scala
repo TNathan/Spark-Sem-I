@@ -3,7 +3,7 @@ package org.dissect.inference.rules
 import org.apache.jena.rdf.model.ModelFactory
 import org.apache.spark.{SparkConf, SparkContext}
 import org.dissect.inference.data.{RDFGraph, RDFGraphWriter, RDFTriple}
-import org.dissect.inference.forwardchaining.ForwardRuleReasonerOWLHorst
+import org.dissect.inference.forwardchaining.{ForwardRuleReasonerOWLHorst, ForwardRuleReasonerRDFS}
 
 import scala.collection.mutable
 
@@ -24,7 +24,7 @@ object RDFGraphMaterializerTest {
     val sc = new SparkContext(conf)
 
     val m = ModelFactory.createDefaultModel()
-    m.read(RDFGraphMaterializerTest.getClass.getClassLoader.getResourceAsStream("data/owl-horst-minimal.ttl"), null, "TURTLE")
+    m.read(RDFGraphMaterializerTest.getClass.getClassLoader.getResourceAsStream("data/owl-horst-minimal2.ttl"), null, "TURTLE")
 
     val triples = new mutable.HashSet[RDFTriple]()
     val iter = m.listStatements()
@@ -39,7 +39,7 @@ object RDFGraphMaterializerTest {
     val graph = new RDFGraph(triplesRDD)
 
     // create reasoner
-    val reasoner = new ForwardRuleReasonerOWLHorst(sc)
+    val reasoner = new ForwardRuleReasonerRDFS(sc)
 
     // compute inferred graph
     val inferredGraph = reasoner.apply(graph)
