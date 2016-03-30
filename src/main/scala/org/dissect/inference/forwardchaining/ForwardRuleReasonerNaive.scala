@@ -1,13 +1,23 @@
 package org.dissect.inference.forwardchaining
 
+import java.util.Collections
+
+import org.apache.jena.reasoner.TriplePattern
 import org.apache.jena.reasoner.rulesys.Rule
+import org.apache.jena.sparql.core.BasicPattern
+import org.apache.jena.sparql.syntax.{ElementGroup, PatternVars}
+import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
-import org.dissect.inference.data.RDFGraph
+import org.dissect.inference.data.{RDFGraph, RDFTriple}
 import org.dissect.inference.utils.RuleUtils
+import org.dissect.inference.utils.RuleUtils._
 import org.slf4j.LoggerFactory
+import org.dissect.inference.utils.{GraphUtils, RuleUtils}
 
 import scala.collection.mutable
+import scala.collection.mutable.ListBuffer
 import scala.language.{existentials, implicitConversions}
+import scala.collection.JavaConversions._
 
 /**
   * A naive implementation of the forward chaining based reasoner.
@@ -27,15 +37,12 @@ class ForwardRuleReasonerNaive(sc: SparkContext, rules: Set[Rule]) extends Forwa
     */
   def apply(graph: RDFGraph) : RDFGraph = {
 
-
     val triplesRDD = graph.triples
-
 
     rules.foreach{rule =>
       println(rule)
       applyRule(rule, graph)
     }
-
 
     graph
   }
@@ -48,6 +55,23 @@ class ForwardRuleReasonerNaive(sc: SparkContext, rules: Set[Rule]) extends Forwa
     */
   def applyRule(rule: Rule, graph: RDFGraph) : Unit = {
 
+    val body = collection.mutable.SortedSet[TriplePattern]() ++ rule.bodyTriplePatterns.toSet
+
+    // take first triple pattern
+    val currentTp = body.head
+
+    while(!body.isEmpty) {
+      // get vars of current tp
+      val vars = varsOf(currentTp)
+      // pick next tp
+      vars.foreach(v => findNextTriplePattern(body, v.toString))
+    }
+
+    body.foreach(tp =>
+      graph.find(tp.asTriple())
+    )
+
+
     val bodyGraph = RuleUtils.graphOfBody(rule)
 
     val headGraph = RuleUtils.graphOfHead(rule)
@@ -59,12 +83,11 @@ class ForwardRuleReasonerNaive(sc: SparkContext, rules: Set[Rule]) extends Forwa
         val bodyGraphNode = bodyGraph find node
 
         bodyGraphNode match {
-          case Some(n) => {
+          case Some(n) =>
             val successor = n findSuccessor (_.outDegree > 0)
             val traverser = n.outerNodeTraverser
 
             println(traverser.toList)
-          }
           case None => println("Not in body")
         }
 
@@ -72,6 +95,26 @@ class ForwardRuleReasonerNaive(sc: SparkContext, rules: Set[Rule]) extends Forwa
     }
 
     println(bodyGraph.edges.toTraversable.toList)
+
+  }
+
+  def findNextTriplePattern(triplePatterns: mutable.SortedSet[TriplePattern], variable: String): Option[TriplePattern] = {
+    val candidates = triplePatterns.filter(tp => tp.getSubject.toString == variable || tp.getPredicate.toString == variable || tp.getObject.toString == variable)
+
+    if(candidates.isEmpty) {
+      None
+    } else {
+      Option(candidates.head)
+    }
+  }
+
+  def varsOf(triple: TriplePattern) = {
+    val eg = new ElementGroup()
+    eg.addTriplePattern(triple.asTriple())
+    PatternVars.vars(eg).toList
+  }
+
+  def toMultimap(triples: RDD[RDFTriple]) = {
 
   }
 

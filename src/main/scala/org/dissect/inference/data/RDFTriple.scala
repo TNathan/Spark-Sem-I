@@ -12,5 +12,5 @@ case class RDFTriple(subject: String, predicate: String, `object`: String) exten
 
   override def _3: String = `object`
 
-  override def toString() = subject + "  " + predicate + "  " + `object`
+  override def toString = subject + "  " + predicate + "  " + `object`
 }
