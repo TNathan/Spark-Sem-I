@@ -344,21 +344,21 @@ object RuleUtils {
   /**
     * Some convenience methods that can be called directly on a rule object.
     *
-    * @param rule
+    * @param rule the rule
     */
   implicit class RuleExtension(val rule: Rule) {
     /**
       * Returns the triple patterns contained in the body of the rule.
       */
     def bodyTriplePatterns(): Seq[TriplePattern] = {
-      return rule.getBody.collect { case b: TriplePattern => b }
+      rule.getBody.collect { case b: TriplePattern => b }
     }
 
     /**
       * Returns the triple patterns contained in the head of the rule.
       */
     def headTriplePatterns(): Seq[TriplePattern] = {
-      return rule.getHead.collect { case b: TriplePattern => b }
+      rule.getHead.collect { case b: TriplePattern => b }
     }
 
     /**

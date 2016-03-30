@@ -116,7 +116,7 @@ final class GraphComponents[N, E[X] <: EdgeLikeIn[X]](
   private[this] def stronglyConnectedComponents(aggregator: DeepSearchStackAggregator) {
     // discovery and finish times for each node
     trace("stronglyConnectedComponents: init")
-    var time = 0;
+    var time = 0
     val discovery: mutable.Map[g.NodeT, Int] = mutable.Map()
     val finish: mutable.Map[g.NodeT, Int] = mutable.Map()
     // stack of previous nodes in the search
