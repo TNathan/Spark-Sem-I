@@ -1,7 +1,7 @@
 package org.dissect.inference.rules
 
+import org.dissect.inference.UnitSpec
 import org.dissect.inference.utils.RuleUtils
-import org.scalatest.FlatSpec
 import org.dissect.inference.utils.RuleUtils.RuleExtension
 
 /**
@@ -9,9 +9,9 @@ import org.dissect.inference.utils.RuleUtils.RuleExtension
   *
   * @author Lorenz Buehmann
   */
-class RulesSpec extends FlatSpec {
+class RulesSpec extends UnitSpec {
 
-  behavior of "operation of rules"
+  behavior of "operations on rules"
 
   val rules = RuleUtils.load("test.rules")
 

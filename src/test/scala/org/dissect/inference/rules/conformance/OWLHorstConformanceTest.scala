@@ -1,4 +1,4 @@
-package org.dissect.inference.rules
+package org.dissect.inference.rules.conformance
 
 import java.io.File
 
@@ -100,7 +100,7 @@ class OWLHorstConformanceTest extends FlatSpec with BeforeAndAfterAll {
 
       val correctOutput = inferredModel.containsAll(testCase.outputGraph)
       assert(correctOutput, "contains all expected triples")
-      
+
       val isomorph = inferredModel.isIsomorphicWith(testCase.outputGraph)
 
 

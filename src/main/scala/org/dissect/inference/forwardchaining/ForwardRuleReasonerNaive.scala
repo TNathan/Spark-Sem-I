@@ -9,10 +9,9 @@ import org.apache.jena.sparql.syntax.{ElementGroup, PatternVars}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 import org.dissect.inference.data.{RDFGraph, RDFTriple}
-import org.dissect.inference.utils.RuleUtils
+import org.dissect.inference.utils.{GraphUtils, RuleUtils, TriplePatternOrdering}
 import org.dissect.inference.utils.RuleUtils._
 import org.slf4j.LoggerFactory
-import org.dissect.inference.utils.{GraphUtils, RuleUtils}
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
@@ -55,7 +54,7 @@ class ForwardRuleReasonerNaive(sc: SparkContext, rules: Set[Rule]) extends Forwa
     */
   def applyRule(rule: Rule, graph: RDFGraph) : Unit = {
 
-    val body = collection.mutable.SortedSet[TriplePattern]() ++ rule.bodyTriplePatterns.toSet
+    val body = collection.mutable.SortedSet[TriplePattern]()(new TriplePatternOrdering()) ++ rule.bodyTriplePatterns.toSet
 
     // take first triple pattern
     val currentTp = body.head

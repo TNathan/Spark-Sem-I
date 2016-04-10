@@ -1,4 +1,4 @@
-package org.dissect.inference.rules
+package org.dissect.inference.rules.conformance
 
 import java.io.File
 

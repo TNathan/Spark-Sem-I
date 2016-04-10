@@ -39,7 +39,7 @@ object TripleUtils {
     */
   def isTerminological(triple: Triple) : Boolean = {
     properties.contains(triple.getPredicate) ||
-      (triple.getPredicate.equals(RDF.`type`) && types.contains(triple.getObject))
+      (triple.getPredicate.equals(RDF.`type`.asNode()) && types.contains(triple.getObject))
   }
 
   /**

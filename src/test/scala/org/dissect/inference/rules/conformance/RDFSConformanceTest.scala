@@ -1,10 +1,11 @@
-package org.dissect.inference.rules
+package org.dissect.inference.rules.conformance
 
 import java.io.File
 
 import org.apache.spark.{SparkConf, SparkContext}
 import org.dissect.inference.data.{RDFGraph, RDFGraphWriter, RDFTriple}
 import org.dissect.inference.forwardchaining.ForwardRuleReasonerRDFS
+import org.dissect.inference.rules.TestCases
 import org.scalatest.{BeforeAndAfterAll, FlatSpec}
 
 import scala.collection.mutable

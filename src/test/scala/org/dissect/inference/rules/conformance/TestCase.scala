@@ -1,4 +1,4 @@
-package org.dissect.inference.rules
+package org.dissect.inference.rules.conformance
 
 import org.apache.jena.rdf.model.Model
 
