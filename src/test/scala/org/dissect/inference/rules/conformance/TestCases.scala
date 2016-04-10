@@ -8,6 +8,8 @@ import scala.collection.mutable.ListBuffer
 import scala.xml.XML
 
 /**
+  * Test cases loader.
+  *
   * @author Lorenz Buehmann
   */
 object TestCases {
