@@ -25,26 +25,29 @@ object Planner {
     */
   def rewrite(rule: Rule) = {
     println("Rule: " + rule)
+    rule.bodyTriplePatterns.foreach(println)
     val body = collection.mutable.SortedSet[TriplePattern]()(new TriplePatternOrdering()) ++ rule.bodyTriplePatterns.toSet
 
-    // take first triple pattern
-    val currentTp = body.head
-    println("TP:" + currentTp)
-    body.remove(currentTp)
+    val visited = mutable.Set[TriplePattern]()
 
-    while(!body.isEmpty) {
-      // get vars of current tp
-      val vars = varsOf(currentTp)
-      println("Vars: " + vars)
-      // pick next tp
+//    process(body.head, body, visited)
+
+    // group triple patterns by var
+    val map = new mutable.HashMap[Node, collection.mutable.Set[TriplePattern]] () with mutable.MultiMap[Node, TriplePattern]
+    body.foreach{tp =>
+      println("TP:" + tp)
+      val vars = RuleUtils.varsOf(tp)
       vars.foreach{v =>
-        val nextTp = findNextTriplePattern(body, v)
-
-        if(nextTp.isDefined) {
-          println("Next TP:" + nextTp)
-          body.remove(nextTp.get)
-        }
+        map.addBinding(v,tp)
+        println(v + "->" + tp)
       }
+    }
+
+    map.foreach{e =>
+      val v = e._1
+      val tps = e._2.toList.combinations(2).foreach(c =>
+        println(new Join(c(0), c(1), v))
+      )
     }
 
 
@@ -74,6 +77,35 @@ object Planner {
 
   }
 
+  case class Join(tp1: TriplePattern, tp2: TriplePattern, joinVar: Node) {
+    override def toString() = tp1.toString + " JOIN " + tp2.toString + " ON " + joinVar
+  }
+
+  def process(tp: TriplePattern, body: mutable.SortedSet[TriplePattern], visited: mutable.Set[TriplePattern]): Unit = {
+    println("TP:" + tp)
+    visited += tp
+
+    // get vars of current triple pattern
+    val vars = varsOf(tp)
+    println("Vars: " + vars)
+
+    // pick next connected triple pattern
+    vars.foreach{v =>
+      val nextTp = findNextTriplePattern(body, v)
+
+      if(nextTp.isDefined) {
+        val tp2 = nextTp.get
+        println("Next TP:" + tp2)
+        println(new Join(tp, tp2, v))
+
+        if(!visited.contains(tp2)) {
+          process(tp2, body, visited)
+        }
+      }
+    }
+    body -= tp
+  }
+
   def findNextTriplePattern(triplePatterns: mutable.SortedSet[TriplePattern], variable: Node): Option[TriplePattern] = {
 
     triplePatterns.foreach(tp => {
@@ -91,36 +123,7 @@ object Planner {
     }
   }
 
-  def varsOf(tp: TriplePattern): List[Node] = {
-    var vars = List[Node]()
-
-    if(tp.getSubject.isVariable) {
-      vars  = vars :+ tp.getSubject
-    }
-
-    if(tp.getPredicate.isVariable) {
-      vars  = vars :+ tp.getPredicate
-    }
-
-    if(tp.getObject.isVariable) {
-      vars  = vars :+ tp.getObject
-    }
-
-    vars
-  }
-
   def toMultimap(triples: RDD[RDFTriple]) = {
 
   }
-
-  def main(args: Array[String]) {
-    val rules = RuleUtils.load("rules/rdfs-simple.rules")
-
-    val rule = RuleUtils.byName(rules, "rdfs2").get
-
-    rewrite(rule)
-  }
-
-
-
 }
