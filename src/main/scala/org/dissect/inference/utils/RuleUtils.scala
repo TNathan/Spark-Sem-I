@@ -319,6 +319,46 @@ object RuleUtils {
     None
   }
 
+
+  /**
+    * Returns all variables that occur in the body.
+    *
+    * @param rule the rule
+    * @return the variables
+    */
+  def varsOfBody(rule: Rule): Set[Node] = {
+    (for(tp <- rule.bodyTriplePatterns()) yield varsOf(tp)).flatten.toSet
+  }
+
+  /**
+    * Returns all variables that occur in the head.
+    *
+    * @param rule the rule
+    * @return the variables
+    */
+  def varsOfHead(rule: Rule): Set[Node] = {
+    (for(tp <- rule.bodyTriplePatterns()) yield varsOf(tp)).flatten.toSet
+  }
+
+
+  def varsOf(tp: TriplePattern): List[Node] = {
+    var vars = List[Node]()
+
+    if(tp.getSubject.isVariable) {
+      vars  = vars :+ tp.getSubject
+    }
+
+    if(tp.getPredicate.isVariable) {
+      vars  = vars :+ tp.getPredicate
+    }
+
+    if(tp.getObject.isVariable) {
+      vars  = vars :+ tp.getObject
+    }
+
+    vars
+  }
+
   /**
     * Returns `true` if `rule1 has the same body as `rule2`, otherwise `false`.
     */
@@ -351,7 +391,7 @@ object RuleUtils {
       * Returns the triple patterns contained in the body of the rule.
       */
     def bodyTriplePatterns(): Seq[TriplePattern] = {
-      rule.getBody.collect { case b: TriplePattern => b }
+      rule.getBody.collect { case b: TriplePattern => b}
     }
 
     /**
