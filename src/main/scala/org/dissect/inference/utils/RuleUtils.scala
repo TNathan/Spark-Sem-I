@@ -342,6 +342,11 @@ object RuleUtils {
 
 
   def varsOf(tp: TriplePattern): List[Node] = {
+    org.apache.jena.graph.Triple.create(tp.asTripleMatch())
+    varsOf(tp.asTriple())
+  }
+
+  def varsOf(tp: org.apache.jena.graph.Triple): List[Node] = {
     var vars = List[Node]()
 
     if(tp.getSubject.isVariable) {
@@ -413,6 +418,15 @@ object RuleUtils {
       */
     def sameHead(otherRule: Rule): Boolean = {
       RuleUtils.sameHead(rule, otherRule)
+    }
+  }
+
+  implicit class TriplePatternEqualiltyExtension(val tp: TriplePattern) {
+    def ==(that: TriplePatternEqualiltyExtension) = that.tp.asTriple().equals(this.tp.asTriple())
+
+    override def equals(that: Any) = that match {
+      case t: TriplePatternEqualiltyExtension => t.tp.asTriple().equals(this.tp.asTriple())
+      case _ => false
     }
   }
 

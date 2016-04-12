@@ -11,6 +11,7 @@ import org.dissect.inference.utils.{RuleUtils, TriplePatternOrdering}
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
+import scala.collection.mutable.ListBuffer
 import scalax.collection.GraphTraversal.{Predecessors, Successors}
 
 /**
@@ -25,15 +26,15 @@ object Planner {
     */
   def rewrite(rule: Rule) = {
     println("Rule: " + rule)
-    rule.bodyTriplePatterns.foreach(println)
-    val body = collection.mutable.SortedSet[TriplePattern]()(new TriplePatternOrdering()) ++ rule.bodyTriplePatterns.toSet
 
-    val visited = mutable.Set[TriplePattern]()
+    val body = rule.bodyTriplePatterns.map(tp => tp.asTriple()).toSet
+
+    val visited = mutable.Set[org.apache.jena.graph.Triple]()
 
 //    process(body.head, body, visited)
 
     // group triple patterns by var
-    val map = new mutable.HashMap[Node, collection.mutable.Set[TriplePattern]] () with mutable.MultiMap[Node, TriplePattern]
+    val map = new mutable.HashMap[Node, collection.mutable.Set[org.apache.jena.graph.Triple]] () with mutable.MultiMap[Node, org.apache.jena.graph.Triple]
     body.foreach{tp =>
       println("TP:" + tp)
       val vars = RuleUtils.varsOf(tp)
@@ -77,11 +78,11 @@ object Planner {
 
   }
 
-  case class Join(tp1: TriplePattern, tp2: TriplePattern, joinVar: Node) {
+  case class Join(tp1: org.apache.jena.graph.Triple, tp2: org.apache.jena.graph.Triple, joinVar: Node) {
     override def toString() = tp1.toString + " JOIN " + tp2.toString + " ON " + joinVar
   }
 
-  def process(tp: TriplePattern, body: mutable.SortedSet[TriplePattern], visited: mutable.Set[TriplePattern]): Unit = {
+  def process(tp: org.apache.jena.graph.Triple, body: mutable.ListBuffer[org.apache.jena.graph.Triple], visited: mutable.Set[org.apache.jena.graph.Triple]): Unit = {
     println("TP:" + tp)
     visited += tp
 
@@ -106,7 +107,7 @@ object Planner {
     body -= tp
   }
 
-  def findNextTriplePattern(triplePatterns: mutable.SortedSet[TriplePattern], variable: Node): Option[TriplePattern] = {
+  def findNextTriplePattern(triplePatterns: mutable.Seq[org.apache.jena.graph.Triple], variable: Node): Option[org.apache.jena.graph.Triple] = {
 
     triplePatterns.foreach(tp => {
       tp.getPredicate.equals(variable)
