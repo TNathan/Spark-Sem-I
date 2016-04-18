@@ -34,8 +34,8 @@ class ForwardRuleReasonerOWLHorst(sc: SparkContext, parallelism: Int) extends Fo
     var subPropertyOfTriples = extractTriples(triplesRDD, RDFS.subPropertyOf.getURI) // rdfs:subPropertyOf
     val domainTriples = extractTriples(triplesRDD, RDFS.domain.getURI) // rdfs:domain
     val rangeTriples = extractTriples(triplesRDD, RDFS.range.getURI) // rdfs:range
-    var equivClassTriples = extractTriples(triplesRDD, OWL2.equivalentClass.getURI) // owl:equivalentClass
-    var equivPropertyTriples = extractTriples(triplesRDD, OWL2.equivalentProperty.getURI) // owl:equivalentProperty
+    val equivClassTriples = extractTriples(triplesRDD, OWL2.equivalentClass.getURI) // owl:equivalentClass
+    val equivPropertyTriples = extractTriples(triplesRDD, OWL2.equivalentProperty.getURI) // owl:equivalentProperty
 
 
     // 1. we have to process owl:equivalentClass and owl:equivalentProperty before computing the transitive closure

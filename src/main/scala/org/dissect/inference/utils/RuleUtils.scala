@@ -340,9 +340,13 @@ object RuleUtils {
     (for(tp <- rule.bodyTriplePatterns()) yield varsOf(tp)).flatten.toSet
   }
 
-
+  /**
+    * Returns all variables that occur in the triple pattern.
+    *
+    * @param tp the triple pattern
+    * @return the variables
+    */
   def varsOf(tp: TriplePattern): List[Node] = {
-    org.apache.jena.graph.Triple.create(tp.asTripleMatch())
     varsOf(tp.asTriple())
   }
 
