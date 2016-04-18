@@ -9,6 +9,7 @@ import org.dissect.inference.data.RDFTriple
 import org.dissect.inference.utils.RuleUtils._
 import org.dissect.inference.utils.{RuleUtils, TriplePatternOrdering}
 import org.apache.jena.graph.Triple
+import org.dissect.inference.utils.TripleUtils._
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
@@ -28,7 +29,7 @@ object Planner {
   def rewrite(rule: Rule) = {
     println("Rule: " + rule)
 
-    val body = rule.bodyTriplePatterns.map(tp => tp.asTriple()).toSet
+    val body = rule.bodyTriplePatterns.map(tp => tp.toTriple).toSet
 
     val visited = mutable.Set[org.apache.jena.graph.Triple]()
 

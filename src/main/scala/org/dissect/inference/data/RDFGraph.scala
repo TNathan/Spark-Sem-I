@@ -28,7 +28,11 @@ case class RDFGraph (triples: RDD[RDFTriple]) {
   }
 
   def find (triple: Triple): RDD[RDFTriple]= {
-    find(Option(triple.getSubject.toString), Option(triple.getPredicate.toString), Option(triple.getObject.toString))
+    find(
+      if(triple.getSubject.isVariable) None else Option(triple.getSubject.toString),
+      if(triple.getPredicate.isVariable) None else Option(triple.getPredicate.toString),
+      if(triple.getObject.isVariable) None else Option(triple.getObject.toString)
+    )
   }
 
 //  def find (s: Node, p: Node, o: Node) = {
