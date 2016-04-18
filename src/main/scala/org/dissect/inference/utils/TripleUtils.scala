@@ -1,6 +1,7 @@
 package org.dissect.inference.utils
 
-import org.apache.jena.graph.Triple
+import org.apache.jena.graph.{Node, NodeFactory, Triple}
+import org.apache.jena.reasoner.TriplePattern
 import org.apache.jena.vocabulary.OWL2._
 import org.apache.jena.vocabulary.RDFS._
 import org.apache.jena.vocabulary.{OWL2, RDF, RDFS}
@@ -60,15 +61,41 @@ object TripleUtils {
     * @param node
     * @param triple
     */
-  def position(node: org.apache.jena.graph.Node, triple: Triple): Int = {
-    if(triple.subjectMatches(node)) {
+  def position(node: Node, triple: Triple): Int = {
+    val ret = if(triple.subjectMatches(node)) {
       1
     } else if(triple.predicateMatches(node)) {
       2
     } else if(triple.objectMatches(node)) {
       3
+    } else {
+      -1
     }
-    -1
+    ret
+  }
+
+  implicit class TriplePatternExtension(val tp: TriplePattern) {
+    def toTriple = {
+      var s = alignVarNode(tp.getSubject)
+      var p = alignVarNode(tp.getPredicate)
+      var o = alignVarNode(tp.getObject)
+
+      println(Triple.create(s, p, o))
+
+      Triple.create(s, p, o)
+    }
+
+    def alignVarNode(node: Node) = {
+      if(node.isVariable) {
+        var name = node.getName
+        if(name.startsWith("?")) {
+          name = name.substring(1)
+          println(NodeFactory.createVariable(name))
+        }
+        NodeFactory.createVariable(name)
+      }
+      node
+    }
   }
 
 }
