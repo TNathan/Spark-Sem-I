@@ -51,8 +51,24 @@ object TripleUtils {
     * </p>
     * @param triple the triple to check
     */
-  def isAssertional(triple: Triple) : Boolean = {
+  def isAssertional(triple: Triple) : Boolean = {triple.getObject
     !isTerminological(triple)
+  }
+
+  /**
+    * Returns the position of the node.
+    * @param node
+    * @param triple
+    */
+  def position(node: org.apache.jena.graph.Node, triple: Triple): Int = {
+    if(triple.subjectMatches(node)) {
+      1
+    } else if(triple.predicateMatches(node)) {
+      2
+    } else if(triple.objectMatches(node)) {
+      3
+    }
+    -1
   }
 
 }

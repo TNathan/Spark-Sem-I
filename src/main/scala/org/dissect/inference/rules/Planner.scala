@@ -8,6 +8,7 @@ import org.apache.spark.rdd.RDD
 import org.dissect.inference.data.RDFTriple
 import org.dissect.inference.utils.RuleUtils._
 import org.dissect.inference.utils.{RuleUtils, TriplePatternOrdering}
+import org.apache.jena.graph.Triple
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
@@ -44,37 +45,54 @@ object Planner {
       }
     }
 
+    val joins = new mutable.HashSet[Join]
+
     map.foreach{e =>
       val v = e._1
       val tps = e._2.toList.combinations(2).foreach(c =>
-        println(new Join(c(0), c(1), v))
+        joins.add(new Join(c(0), c(1), v))
       )
     }
 
+    new Plan(body, rule.headTriplePatterns().toList.head.asTriple(), joins)
 
-    val bodyGraph = RuleUtils.graphOfBody(rule)
-    println("Body graph:" + bodyGraph)
 
-    val headGraph = RuleUtils.graphOfHead(rule)
+//    val bodyGraph = RuleUtils.graphOfBody(rule)
+//    println("Body graph:" + bodyGraph)
+//
+//    val headGraph = RuleUtils.graphOfHead(rule)
+//
+//    val headNodes = headGraph.nodes.toList
+//
+//    headNodes.foreach{node =>
+//      if(node.value.isVariable) {
+//        val bodyGraphNode = bodyGraph find node
+//
+//        bodyGraphNode match {
+//          case Some(n) =>
+//            val successor = n findSuccessor (_.outDegree > 0)
+//
+//            println("Node: " + n)
+//            println("Out:" + n.outerEdgeTraverser.withDirection(Successors).toList)
+//            println("In:" + n.outerEdgeTraverser.withDirection(Predecessors).toList)
+//          case None => println("Not in body")
+//        }
+//
+//      }
+//    }
 
-    val headNodes = headGraph.nodes.toList
+  }
 
-    headNodes.foreach{node =>
-      if(node.value.isVariable) {
-        val bodyGraphNode = bodyGraph find node
+  case class Plan(triplePatterns: Set[Triple], target: Triple, joins: mutable.Set[Join]) {
 
-        bodyGraphNode match {
-          case Some(n) =>
-            val successor = n findSuccessor (_.outDegree > 0)
+    def generateJoins() = {
 
-            println("Node: " + n)
-            println("Out:" + n.outerEdgeTraverser.withDirection(Successors).toList)
-            println("In:" + n.outerEdgeTraverser.withDirection(Predecessors).toList)
-          case None => println("Not in body")
-        }
-
-      }
     }
+
+    def addTriplePattern(tp: TriplePattern) = {
+
+    }
+
 
   }
 
