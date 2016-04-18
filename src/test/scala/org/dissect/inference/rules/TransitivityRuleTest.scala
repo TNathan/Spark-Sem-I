@@ -65,7 +65,9 @@ object TransitivityRuleTest {
       // for each triple pattern compute the relation first
       val relations = new mutable.HashMap[org.apache.jena.graph.Triple, RDD[RDFTriple]]()
       plan.triplePatterns.foreach{tp =>
+//        println(tp)
         val rel = graph.find(tp)
+//        println("REL\n" + rel.collect().mkString("\n"))
         relations += (tp -> rel)
       }
 
@@ -73,8 +75,8 @@ object TransitivityRuleTest {
       plan.joins.foreach{join =>
         println(join)
 
-        var rel1 = relations(join.tp1)
-        var rel2 = relations(join.tp2)
+        val rel1 = relations(join.tp1)
+        val rel2 = relations(join.tp2)
 
         val joinVar = join.joinVar
 
@@ -84,6 +86,7 @@ object TransitivityRuleTest {
           case 2  => RDDOperations.predKeySubjObj(rel1)
           case 3  => RDDOperations.objKeySubjPred(rel1)
         }
+        println("TMP1\n" + tmp1.collect().mkString("\n"))
 
         // convert RDD of relation 1 by position of join variable
         val tmp2 = TripleUtils.position(joinVar, join.tp2) match {
@@ -91,10 +94,11 @@ object TransitivityRuleTest {
           case 2  => RDDOperations.predKeySubjObj(rel2)
           case 3  => RDDOperations.objKeySubjPred(rel2)
         }
+        println("TMP2\n" + tmp2.collect().mkString("\n"))
 
         // perform join
         val res = tmp1.join(tmp2)
-        println("REL\n" + res.collect().mkString("\n"))
+        println("RES\n" + res.collect().mkString("\n"))
 
       }
     }
