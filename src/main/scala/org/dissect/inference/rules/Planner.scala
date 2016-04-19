@@ -38,11 +38,9 @@ object Planner {
     // group triple patterns by var
     val map = new mutable.HashMap[Node, collection.mutable.Set[org.apache.jena.graph.Triple]] () with mutable.MultiMap[Node, org.apache.jena.graph.Triple]
     body.foreach{tp =>
-      println("TP:" + tp)
       val vars = RuleUtils.varsOf(tp)
       vars.foreach{v =>
         map.addBinding(v,tp)
-        println(v + "->" + tp)
       }
     }
 
@@ -50,7 +48,7 @@ object Planner {
 
     map.foreach{e =>
       val v = e._1
-      val tps = e._2.toList.combinations(2).foreach(c =>
+      val tps = e._2.toList.sortBy(_.toString).combinations(2).foreach(c =>
         joins.add(new Join(c(0), c(1), v))
       )
     }
@@ -99,6 +97,10 @@ object Planner {
 
   case class Join(tp1: org.apache.jena.graph.Triple, tp2: org.apache.jena.graph.Triple, joinVar: Node) {
     override def toString() = tp1.toString + " JOIN " + tp2.toString + " ON " + joinVar
+
+    override def equals(obj: scala.Any): Boolean = super.equals(obj)
+
+    override def hashCode(): Int = super.hashCode()
   }
 
   def process(tp: org.apache.jena.graph.Triple, body: mutable.ListBuffer[org.apache.jena.graph.Triple], visited: mutable.Set[org.apache.jena.graph.Triple]): Unit = {

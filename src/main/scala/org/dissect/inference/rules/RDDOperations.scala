@@ -84,6 +84,24 @@ object RDDOperations {
   }
 
   /**
+    * For a given triple (s,p,o) it returns ((s,p),o)
+    * @param triples the triples (s,p,o)
+    * @return tuples ((s,p),o)
+    */
+  def subjPredKeyObj(triples: RDD[RDFTriple]) = {
+    triples.map(t => (t.subject, t.predicate) -> t.`object`)
+  }
+
+  /**
+    * For a given triple (s,p,o) it returns ((o,p),s)
+    * @param triples the triples (s,p,o)
+    * @return tuples ((o,p),s)
+    */
+  def objPredKeySubj(triples: RDD[RDFTriple]) = {
+    triples.map(t => (t.`object`, t.predicate) -> t.subject)
+  }
+
+  /**
     * For a given tuple (x,y) it returns (y,x)
     * @param tuples the tuples (x,y)
     * @return tuples (y,x)

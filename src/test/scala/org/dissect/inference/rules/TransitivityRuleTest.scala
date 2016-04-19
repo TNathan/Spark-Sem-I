@@ -27,12 +27,19 @@ object TransitivityRuleTest {
     // generate graph
     val triples = new mutable.HashSet[RDFTriple]()
     val ns = "http://ex.org/"
-    val p = ns + "p"
-    triples += RDFTriple(p, RDF.`type`.getURI, OWL2.TransitiveProperty.getURI)
+    val p1 = ns + "p1"
+    val p2 = ns + "p2"
+    triples += RDFTriple(p1, RDF.`type`.getURI, OWL2.TransitiveProperty.getURI)
+    triples += RDFTriple(p2, RDF.`type`.getURI, OWL2.TransitiveProperty.getURI)
 
     for(i <- 1 to 10) {
-      triples += RDFTriple(ns + "x" + i, p, ns + "y" + i)
-      triples += RDFTriple(ns + "y" + i, p, ns + "z" + i)
+      triples += RDFTriple(ns + "x" + i, p1, ns + "y" + i)
+      triples += RDFTriple(ns + "y" + i, p1, ns + "z" + i)
+    }
+
+    for(i <- 11 to 20) { // should not produce (?x_i, p1, ?z_i) as p1 and p2 are used
+      triples += RDFTriple(ns + "x" + i, p1, ns + "y" + i)
+      triples += RDFTriple(ns + "y" + i, p2, ns + "z" + i)
     }
 
     val triplesRDD = sc.parallelize(triples.toSeq, 2)
@@ -61,6 +68,7 @@ object TransitivityRuleTest {
 
   class PlanExecutorNative(sc: SparkContext) {
     def execute(plan: Plan, graph: RDFGraph) = {
+      println("JOIN CANDIDATES:\n" + plan.joins.mkString("\n"))
 
       // for each triple pattern compute the relation first
       val relations = new mutable.HashMap[org.apache.jena.graph.Triple, RDD[RDFTriple]]()
@@ -73,7 +81,7 @@ object TransitivityRuleTest {
 
       // TODO order joins by dependencies
       plan.joins.foreach{join =>
-        println(join)
+        println("JOIN: " + join)
 
         val rel1 = relations(join.tp1)
         val rel2 = relations(join.tp2)
@@ -125,12 +133,12 @@ object TransitivityRuleTest {
         .map(e => RDFTriple(e._2._1._1, e._1, e._2._1._2)) // (?x, ?p, ?y)
       println("REL2\n" + rel2.collect().mkString("\n"))
 
-      val rel3 = RDDOperations.subjKeyPredObj(rel2) // (?y, (?p, ?z))
+      val rel3 = RDDOperations.subjPredKeyObj(rel2) // ((?y, ?p), ?z)
         .join(
-        RDDOperations.objKeySubjPred(rel2)) // (?y, (?x, ?p))
-      // -> (?y, ((?p, ?z),(?x, ?p))
+        RDDOperations.objPredKeySubj(rel2)) // ((?y, ?p), ?x)
+      // -> ((?y, ?p) , (?z, ?x))
       println("REL3\n" + rel3.collect().mkString("\n"))
-      val result = rel3.map(e => RDFTriple(e._2._2._1, e._2._2._2, e._2._1._2))
+      val result = rel3.map(e => RDFTriple(e._2._2, e._1._2, e._2._1))
 
       new RDFGraph(result)
     }

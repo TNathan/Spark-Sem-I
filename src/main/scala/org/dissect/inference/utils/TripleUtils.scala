@@ -76,11 +76,9 @@ object TripleUtils {
 
   implicit class TriplePatternExtension(val tp: TriplePattern) {
     def toTriple = {
-      var s = alignVarNode(tp.getSubject)
-      var p = alignVarNode(tp.getPredicate)
-      var o = alignVarNode(tp.getObject)
-
-      println(Triple.create(s, p, o))
+      val s = alignVarNode(tp.getSubject)
+      val p = alignVarNode(tp.getPredicate)
+      val o = alignVarNode(tp.getObject)
 
       Triple.create(s, p, o)
     }
@@ -90,7 +88,6 @@ object TripleUtils {
         var name = node.getName
         if(name.startsWith("?")) {
           name = name.substring(1)
-          println(NodeFactory.createVariable(name))
         }
         NodeFactory.createVariable(name)
       }
