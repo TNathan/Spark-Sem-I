@@ -82,27 +82,6 @@ object Planner {
 
   }
 
-  case class Plan(triplePatterns: Set[Triple], target: Triple, joins: mutable.Set[Join]) {
-
-    def generateJoins() = {
-
-    }
-
-    def addTriplePattern(tp: TriplePattern) = {
-
-    }
-
-
-  }
-
-  case class Join(tp1: org.apache.jena.graph.Triple, tp2: org.apache.jena.graph.Triple, joinVar: Node) {
-    override def toString() = tp1.toString + " JOIN " + tp2.toString + " ON " + joinVar
-
-    override def equals(obj: scala.Any): Boolean = super.equals(obj)
-
-    override def hashCode(): Int = super.hashCode()
-  }
-
   def process(tp: org.apache.jena.graph.Triple, body: mutable.ListBuffer[org.apache.jena.graph.Triple], visited: mutable.Set[org.apache.jena.graph.Triple]): Unit = {
     println("TP:" + tp)
     visited += tp
