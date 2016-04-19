@@ -4,10 +4,10 @@ import org.apache.jena.vocabulary.{OWL2, RDF}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 import org.dissect.inference.data.{RDFGraph, RDFGraphLoader, RDFGraphWriter, RDFTriple}
-import org.dissect.inference.rules.Planner.Plan
+import org.dissect.inference.rules.plan.{Join, Plan}
 import org.dissect.inference.utils.{RuleUtils, TripleUtils}
-import scala.math.Ordering.Implicits._
 
+import scala.math.Ordering.Implicits._
 import scala.collection.mutable
 
 /**
@@ -67,8 +67,13 @@ object TransitivityRuleTest {
     val rule = RuleUtils.byName(rules, "prp-trp").get
     val plan = Planner.rewrite(rule)
 
-    val planExecutor = new PlanExecutorNative(sc)
-    planExecutor.execute(plan, graph)
+    val planExecutor1 = new PlanExecutorNative(sc)
+    planExecutor1.execute(plan, graph)
+
+    val planExecutor2 = new PlanExecutorSQL(sc)
+    planExecutor2.execute(plan, graph)
+
+
 
     sc.stop()
   }
@@ -103,6 +108,8 @@ object TransitivityRuleTest {
 
         val rel1 = relations(tp1)
         val rel2 = relations(tp2)
+
+        println(plan.toSQL(tp1))
 
         val res =
           if (joinVars.size == 1) {
@@ -154,8 +161,14 @@ object TransitivityRuleTest {
       }
     }
 
-    def mergeJoins(joins: mutable.Set[Planner.Join]) = {
+    def mergeJoins(joins: mutable.Set[Join]) = {
       joins.groupBy(join => (join.tp1, join.tp2))
+    }
+  }
+
+  class PlanExecutorSQL(sc: SparkContext) {
+    def execute(plan: Plan, graph: RDFGraph) = {
+      println(plan.toSQL)
     }
   }
 

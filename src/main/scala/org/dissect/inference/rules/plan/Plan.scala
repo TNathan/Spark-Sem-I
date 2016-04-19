@@ -1,7 +1,8 @@
 package org.dissect.inference.rules.plan
 
-import org.apache.jena.graph.Triple
+import org.apache.jena.graph.{Node, Triple}
 import org.apache.jena.reasoner.TriplePattern
+import org.dissect.inference.utils.RuleUtils
 
 import scala.collection.mutable
 
@@ -12,6 +13,9 @@ import scala.collection.mutable
   */
 case class Plan(triplePatterns: Set[Triple], target: Triple, joins: mutable.Set[Join]) {
 
+  val aliases = new mutable.HashMap[Triple, String]()
+  var idx = 0
+
   def generateJoins() = {
 
   }
@@ -21,7 +25,17 @@ case class Plan(triplePatterns: Set[Triple], target: Triple, joins: mutable.Set[
   }
 
   def toSQL = {
+    var sql = "SELECT "
 
+    val requiredVars = RuleUtils.varsOf(target)
+
+    triplePatterns.foreach(tp => println(tp))
+
+    sql += " FROM " + triplePatterns.map(tp => fromPart(tp)).mkString(", ")
+
+    sql += " WHERE " + triplePatterns.map(tp => whereParts(tp)).flatten.mkString(" AND ")
+
+    sql
   }
 
   def fromPart() = {
@@ -33,25 +47,69 @@ case class Plan(triplePatterns: Set[Triple], target: Triple, joins: mutable.Set[
 
   }
 
-  def toSQL(tp: TriplePattern) = {
+  def toSQL(tp: Triple) = {
     var sql = "SELECT "
+
+    sql += projectionPart(tp)
+
+    sql += " FROM " + fromPart(tp)
+
+    sql += " WHERE " + whereParts(tp).mkString(" AND ")
+
+    sql
+  }
+
+  def projectionPart(tp: Triple) = {
+    subjectColumn() + ", " + predicateColumn() + ", " + objectColumn()
+  }
+
+  def projectionPart(tp: Triple, selectedVars: List[Node]) = {
 
   }
 
-  def wherePart(tp: TriplePattern) = {
-    var sql = "WHERE "
+  def uniqueAliasFor(tp: Triple) = {
+    aliases.getOrElseUpdate(tp, "rel" + (idx+=1))
+  }
+
+  def fromPart(tp: Triple) = {
+    tableName(tp)
+  }
+
+  def whereParts(tp: Triple) = {
+    val res = mutable.Set[String]()
 
     if(!tp.getSubject.isVariable) {
-      sql += subjectColumn() + "=" + tp.getSubject + " AND "
+      res += subjectColumnName(tp) + "='" + tp.getSubject + "'"
     }
 
     if(!tp.getPredicate.isVariable) {
-      sql += predicateColumn() + "=" + tp.getPredicate + " AND "
+      res += predicateColumnName(tp) + "='" + tp.getPredicate + "'"
     }
 
     if(!tp.getObject.isVariable) {
-      sql += objectColumn() + "=" + tp.getObject
+      res += objectColumnName(tp) + "='" + tp.getObject + "'"
     }
+    res
+  }
+
+  def subjectColumnName(tp: Triple) = {
+    uniqueAliasFor(tp) + "." + subjectColumn()
+  }
+
+  def predicateColumnName(tp: Triple) = {
+    uniqueAliasFor(tp) + "." + predicateColumn()
+  }
+
+  def objectColumnName(tp: Triple) = {
+    uniqueAliasFor(tp) + "." + objectColumn()
+  }
+
+  def tableName(tp: Triple) = {
+    table() + " " + uniqueAliasFor(tp)
+  }
+
+  def table() = {
+    "TRIPLES"
   }
 
   def subjectColumn() = {

@@ -9,6 +9,7 @@ import org.dissect.inference.data.RDFTriple
 import org.dissect.inference.utils.RuleUtils._
 import org.dissect.inference.utils.{RuleUtils, TriplePatternOrdering}
 import org.apache.jena.graph.Triple
+import org.dissect.inference.rules.plan.{Join, Plan}
 import org.dissect.inference.utils.TripleUtils._
 
 import scala.collection.JavaConversions._
