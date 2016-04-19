@@ -21,13 +21,13 @@ case class RDFGraph (triples: RDD[RDFTriple]) {
     */
   def find (s: Option[String] = None, p: Option[String] = None, o: Option[String] = None): RDD[RDFTriple]= {
       triples.filter(t =>
-          (s == None || t.subject == s) &&
-          (p == None || t.predicate == p) &&
-          (o == None || t.`object` == o)
+          (s == None || t.subject == s.get) &&
+          (p == None || t.predicate == p.get) &&
+          (o == None || t.`object` == o.get)
       )
   }
 
-  def find (triple: Triple): RDD[RDFTriple]= {
+  def find (triple: Triple): RDD[RDFTriple] = {
     find(
       if(triple.getSubject.isVariable) None else Option(triple.getSubject.toString),
       if(triple.getPredicate.isVariable) None else Option(triple.getPredicate.toString),
