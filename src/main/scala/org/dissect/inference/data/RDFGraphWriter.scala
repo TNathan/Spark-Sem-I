@@ -7,6 +7,8 @@ import org.apache.jena.rdf.model.{Model, ModelFactory}
 import org.dissect.inference.utils.RDFTripleOrdering
 import org.slf4j.LoggerFactory
 import org.apache.spark.SparkContext._
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.DataFrame
 
 /**
   * Writes an RDF graph to disk.
@@ -18,7 +20,7 @@ object RDFGraphWriter {
 
   private val logger = com.typesafe.scalalogging.slf4j.Logger(LoggerFactory.getLogger(this.getClass.getName))
 
-  def writeToFile(graph: RDFGraph, path: String) = {
+  def writeToFile(graph: RDFGraph, path: String): Unit = {
     logger.info("writing triples to disk...")
     val startTime  = System.currentTimeMillis()
 
@@ -30,6 +32,14 @@ object RDFGraphWriter {
       .saveAsTextFile(path)
 
     logger.info("finished writing triples to disk in " + (System.currentTimeMillis()-startTime) + "ms.")
+  }
+
+  def writeToFile(triples: RDD[RDFTriple], path: String): Unit = {
+    writeToFile(RDFGraph(triples), path)
+  }
+
+  def writeToFile(dataFrame: DataFrame, path: String): Unit = {
+    writeToFile(dataFrame.rdd.map(row => RDFTriple(row.getString(0), row.getString(1), row.getString(2))), path)
   }
 
   def convertToModel(graph: RDFGraph) : Model = {
