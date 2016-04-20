@@ -27,11 +27,36 @@ case class Plan(triplePatterns: Set[Triple], target: Triple, joins: mutable.Set[
   def toSQL = {
     var sql = "SELECT "
 
-    val requiredVars = RuleUtils.varsOf(target)
+    sql += projectionPart()
 
     sql += fromPart()
 
     sql += wherePart()
+
+    sql
+  }
+
+  def projectionPart(): String = {
+    var sql = ""
+
+    val requiredVars = RuleUtils.varsOf(target)
+
+    val expressions = mutable.ArrayBuffer[String]()
+
+    requiredVars.foreach{ v =>
+      var done = false
+
+      for(tp <- triplePatterns; if !done) {
+        val expr = expressionFor(v, tp)
+
+        if(expr != "NULL") {
+          expressions += expr
+          done = true
+        }
+      }
+    }
+
+    sql += expressions.mkString(", ")
 
     sql
   }
