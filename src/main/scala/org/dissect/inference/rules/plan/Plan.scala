@@ -29,22 +29,27 @@ case class Plan(triplePatterns: Set[Triple], target: Triple, joins: mutable.Set[
 
     val requiredVars = RuleUtils.varsOf(target)
 
-    triplePatterns.foreach(tp => println(tp))
+    sql += fromPart()
 
-    sql += " FROM " + triplePatterns.map(tp => fromPart(tp)).mkString(", ")
-
-    sql += " WHERE " + triplePatterns.map(tp => whereParts(tp)).flatten.mkString(" AND ")
+    sql += wherePart()
 
     sql
   }
 
-  def fromPart() = {
-    var sql = ""
-
+  def fromPart(): String = {
+    " FROM " + triplePatterns.map(tp => fromPart(tp)).mkString(", ")
   }
 
-  def wherePart() = {
+  def wherePart(): String = {
+    var sql = " WHERE "
+    val expressions = mutable.ArrayBuffer[String]()
 
+    expressions ++= triplePatterns.flatMap(tp => whereParts(tp))
+    expressions ++= joins.map(join => joinExpressionFor(join))
+
+    sql += expressions.mkString(" AND ")
+
+    sql
   }
 
   def toSQL(tp: Triple) = {
@@ -67,12 +72,45 @@ case class Plan(triplePatterns: Set[Triple], target: Triple, joins: mutable.Set[
 
   }
 
-  def uniqueAliasFor(tp: Triple) = {
-    aliases.getOrElseUpdate(tp, "rel" + (idx+=1))
+  def uniqueAliasFor(tp: Triple): String = {
+    aliases.get(tp) match {
+      case Some(alias) => alias
+      case _ =>
+        val alias = "rel" + idx
+        aliases += tp -> alias
+        idx += 1
+        alias
+    }
+  }
+
+  def joinExpressionFor(tp1: Triple, tp2: Triple, joinVar: Node) = {
+    expressionFor(joinVar, tp1) + "=" + expressionFor(joinVar, tp2)
+  }
+
+  def joinExpressionFor(join: Join) = {
+    expressionFor(join.joinVar, join.tp1) + "=" + expressionFor(join.joinVar, join.tp2)
   }
 
   def fromPart(tp: Triple) = {
     tableName(tp)
+  }
+
+  def expressionFor(variable: Node, tp: Triple): String = {
+    val ret =
+      if (tp.subjectMatches(variable)) {
+        subjectColumnName(tp)
+      } else if (tp.predicateMatches(variable)) {
+        predicateColumnName(tp)
+      } else if (tp.objectMatches(variable)) {
+        objectColumnName(tp)
+      } else {
+        "NULL"
+      }
+    ret
+  }
+
+  def isVarWithName(node: Node) = {
+
   }
 
   def whereParts(tp: Triple) = {
