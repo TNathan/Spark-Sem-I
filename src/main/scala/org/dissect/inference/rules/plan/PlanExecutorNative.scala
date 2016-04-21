@@ -11,6 +11,7 @@ import org.dissect.inference.utils.TripleUtils
 import scala.collection.mutable
 import org.apache.spark.sql.catalyst.plans
 import org.apache.spark.sql.catalyst.plans.{Inner, logical}
+import org.apache.spark.sql.execution.LogicalRDD
 
 /**
   * An executor that works on the the native Scala data structures and uses Spark joins, filters etc.
@@ -37,15 +38,20 @@ class PlanExecutorNative(sc: SparkContext) {
       logicalPlan match {
         case logical.Join(left, right, Inner, Some(condition)) =>
           println("JOIN")
-          execute(left)
-          execute(right)
+          val leftRDD = execute(left)
+          val rightRDD = execute(right)
         case logical.Project(projectList, child) =>
           println("PROJECT")
+          println(projectList.map(expr => expr.qualifiedName).mkString("--"))
           execute(child)
         case logical.Filter(condition, child) =>
           println("FILTER")
-          execute(child)
-        case _ => Nil
+          val rdd = execute(child)
+//        case LogicalRDD(output, rdd) =>
+//          println(rdd.name)
+        case default =>
+          println(default)
+          Nil
       }
   }
 
