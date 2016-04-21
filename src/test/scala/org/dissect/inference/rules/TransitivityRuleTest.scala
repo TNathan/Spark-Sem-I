@@ -60,31 +60,38 @@ object TransitivityRuleTest {
 
     val graph = new RDFGraph(triplesRDD)
 
+    // 1. the hard-coded reasoner
+
     // create reasoner
-    val reasoner = new TransitivityRuleReasoner(sc)
-
-    // compute inferred graph
-    val res1 = reasoner.apply(graph)
-
-    // write triples to disk
-    RDFGraphWriter.writeToFile(res1, "/tmp/spark-tests/built-in")
+//    val reasoner = new TransitivityRuleReasoner(sc)
+//
+//    // compute inferred graph
+//    val res1 = reasoner.apply(graph)
+//
+//    // write triples to disk
+//    RDFGraphWriter.writeToFile(res1, "/tmp/spark-tests/built-in")
 
 
     val rules = RuleUtils.load("test.rules")
     val rule = RuleUtils.byName(rules, "prp-trp").get
-    val plan = Planner.rewrite(rule)
+    val plan = Planner.generatePlan(rule)
+
+    // 2. the generic rule executor on native Spark structures
 
     val planExecutor1 = new PlanExecutorNative(sc)
     val res2 = planExecutor1.execute(plan, graph)
-    RDFGraphWriter.writeToFile(RDFGraph(res2), "/tmp/spark-tests/native")
+    RDFGraphWriter.writeToFile(res2, "/tmp/spark-tests/native")
+
+
+    // 3. the SQL based rule executor
 
     // generate the SQL context
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
 
     // create a DataFrame
     val df = graph.toDataFrame(sqlContext)
-    val planExecutor2 = new PlanExecutorSQL(sc)
-    val res3 = planExecutor2.execute(plan, df, sqlContext)
+    val planExecutor2 = new PlanExecutorSQL(sqlContext)
+    val res3 = planExecutor2.execute(plan, df)
     RDFGraphWriter.writeToFile(res3, "/tmp/spark-tests/sql")
 
     sc.stop()

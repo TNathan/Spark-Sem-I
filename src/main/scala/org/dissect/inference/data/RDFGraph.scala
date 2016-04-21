@@ -42,6 +42,31 @@ case class RDFGraph (triples: RDD[RDFTriple]) {
     )
   }
 
+  /**
+    * Return the union of the current RDF graph with the given RDF graph
+    * @param graph the other RDF graph
+    * @return the union of both graphs
+    */
+  def union(graph: RDFGraph): RDFGraph = {
+    RDFGraph(triples.union(graph.triples))
+  }
+
+  /**
+    * Persist the triples RDD with the default storage level (`MEMORY_ONLY`).
+    */
+  def cache() = {
+    triples.cache()
+    this
+  }
+
+  /**
+    * Return the number of triples.
+    * @return the number of triples
+    */
+  def size() = {
+    triples.count()
+  }
+
   def toDataFrame(sqlContext: SQLContext): DataFrame = {
     // convert RDD to DataFrame
     val schemaString = "subject predicate object"

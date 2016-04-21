@@ -13,7 +13,7 @@ import scala.language.{existentials, implicitConversions}
   *
   * @author Lorenz Buehmann
   */
-class ForwardRuleReasonerNaive(sc: SparkContext, rules: Set[Rule]) extends ForwardRuleReasoner{
+class ForwardRuleReasonerOptimized(sc: SparkContext, rules: Set[Rule]) extends ForwardRuleReasoner{
 
   private val logger = com.typesafe.scalalogging.slf4j.Logger(LoggerFactory.getLogger(this.getClass.getName))
 
@@ -30,21 +30,14 @@ class ForwardRuleReasonerNaive(sc: SparkContext, rules: Set[Rule]) extends Forwa
 
     var currentGraph = graph.cache()
 
-    var iteration = 0
-
     var oldCount = 0L
     var nextCount = currentGraph.size
     do {
-      iteration += 1
-      logger.debug("Iteration " + iteration)
       oldCount = nextCount
 
-      currentGraph = new RDFGraph(
-        currentGraph
+      currentGraph = currentGraph
         .union(applyRules(graph))
-          .triples
-          .distinct()
-          .cache())
+        .cache()
       nextCount = currentGraph.size()
     } while (nextCount != oldCount)
 

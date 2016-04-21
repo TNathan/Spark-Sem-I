@@ -2,11 +2,15 @@ package org.dissect.inference.rules.plan
 
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import org.dissect.inference.data.{RDFGraph, RDFTriple}
+import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.dissect.inference.data.{EmptyRDFGraphDataFrame, RDFGraph, RDFTriple}
 import org.dissect.inference.rules.RDDOperations
 import org.dissect.inference.utils.TripleUtils
 
 import scala.collection.mutable
+import org.apache.spark.sql.catalyst.plans
+import org.apache.spark.sql.catalyst.plans.{Inner, logical}
 
 /**
   * An executor that works on the the native Scala data structures and uses Spark joins, filters etc.
@@ -15,7 +19,37 @@ import scala.collection.mutable
   */
 class PlanExecutorNative(sc: SparkContext) {
 
-  def execute(plan: Plan, graph: RDFGraph): RDD[RDFTriple] = {
+  val sqlContext = new SQLContext(sc)
+  val emptyGraph = EmptyRDFGraphDataFrame.get(sqlContext)
+
+
+  def execute(plan: Plan, graph: RDFGraph): RDFGraph = {
+    val logicalPlan = plan.toLogicalPlan(sqlContext)
+
+    println(logicalPlan.toString())
+
+    execute(logicalPlan)
+
+    graph
+  }
+
+  def execute(logicalPlan: LogicalPlan): Unit = {
+      logicalPlan match {
+        case logical.Join(left, right, Inner, Some(condition)) =>
+          println("JOIN")
+          execute(left)
+          execute(right)
+        case logical.Project(projectList, child) =>
+          println("PROJECT")
+          execute(child)
+        case logical.Filter(condition, child) =>
+          println("FILTER")
+          execute(child)
+        case _ => Nil
+      }
+  }
+
+  def execute2(plan: Plan, graph: RDFGraph): RDFGraph = {
     println("JOIN CANDIDATES:\n" + plan.joins.mkString("\n"))
 
     // for each triple pattern compute the relation first
@@ -95,7 +129,7 @@ class PlanExecutorNative(sc: SparkContext) {
       println("RES\n" + res.collect().mkString("\n"))
     }
 
-    graph.triples
+    graph
   }
 
   def mergeJoins(joins: mutable.Set[Join]) = {
