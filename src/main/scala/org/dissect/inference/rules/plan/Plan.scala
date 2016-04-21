@@ -2,6 +2,12 @@ package org.dissect.inference.rules.plan
 
 import org.apache.jena.graph.{Node, Triple}
 import org.apache.jena.reasoner.TriplePattern
+import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.catalyst.SqlParser
+import org.apache.spark.sql.catalyst.optimizer.DefaultOptimizer
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.execution.{QueryExecution, SparkSQLParser}
+import org.apache.spark.sql.execution.datasources.DDLParser
 import org.dissect.inference.utils.RuleUtils
 
 import scala.collection.mutable
@@ -13,6 +19,9 @@ import scala.collection.mutable
   */
 case class Plan(triplePatterns: Set[Triple], target: Triple, joins: mutable.Set[Join]) {
 
+  val sqlParser = new SparkSQLParser(SqlParser.parse(_))
+  val ddlParser = new DDLParser(sqlParser.parse(_))
+
   val aliases = new mutable.HashMap[Triple, String]()
   var idx = 0
 
@@ -22,6 +31,24 @@ case class Plan(triplePatterns: Set[Triple], target: Triple, joins: mutable.Set[
 
   def addTriplePattern(tp: TriplePattern) = {
 
+  }
+
+  def toLogicalPlan(sqlContext: SQLContext): LogicalPlan = {
+    // convert to SQL query
+    val sql = toSQL
+
+    // generate logical plan
+    var logicalPlan = ddlParser.parse(sql, false)
+//    println(logicalPlan.toString())
+
+    // optimize plan
+    logicalPlan = DefaultOptimizer.execute(logicalPlan)
+//    println(logicalPlan.toString())
+
+    val qe = new QueryExecution(sqlContext, logicalPlan)
+    val optimizedPlan = qe.optimizedPlan
+
+    optimizedPlan
   }
 
   def toSQL = {

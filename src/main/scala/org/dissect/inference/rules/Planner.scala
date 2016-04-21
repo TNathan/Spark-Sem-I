@@ -27,7 +27,7 @@ object Planner {
     *
     * @param rule the rule
     */
-  def rewrite(rule: Rule) = {
+  def generatePlan(rule: Rule) = {
     println("Rule: " + rule)
 
     val body = rule.bodyTriplePatterns.map(tp => tp.toTriple).toSet
