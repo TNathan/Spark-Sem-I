@@ -46,7 +46,7 @@ case class Plan(triplePatterns: Set[Triple], target: Triple, joins: mutable.Set[
 //    println(logicalPlan.toString())
 
     val qe = new QueryExecution(sqlContext, logicalPlan)
-    val optimizedPlan = qe.optimizedPlan
+    val optimizedPlan = DefaultOptimizer.execute(qe.optimizedPlan)
 
     optimizedPlan
   }

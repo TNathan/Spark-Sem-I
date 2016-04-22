@@ -14,6 +14,11 @@ import org.apache.spark.sql.catalyst.plans
 import org.apache.spark.sql.catalyst.plans.{Inner, logical}
 import org.apache.spark.sql.execution.LogicalRDD
 
+import shapeless._
+import HList._
+import syntax.std.traversable._
+import syntax.std.product._
+
 /**
   * An executor that works on the the native Scala data structures and uses Spark joins, filters etc.
   *
@@ -29,7 +34,7 @@ class PlanExecutorNative(sc: SparkContext) {
 
     println(logicalPlan.toString())
 
-    execute(logicalPlan, graph.triples)
+    executePlan(logicalPlan, graph.triples)
 
     graph
   }
@@ -74,50 +79,82 @@ class PlanExecutorNative(sc: SparkContext) {
 //      }
 //  }
 
-  def execute(logicalPlan: LogicalPlan, triples: RDD[RDFTriple]): RDD[_] = {
+  def extract[T <: Product](tuple: T, positions: Seq[Int]): Product = {
+    val list = tuple.productIterator.toList
+    val newList = positions.map(pos => list(pos)).toTuple
+    newList
+  }
+
+  def executePlan[T <: Product](logicalPlan: LogicalPlan, triples: RDD[T]): RDD[T] = {
     logicalPlan match {
       case logical.Join(left, right, Inner, Some(condition)) =>
         println("JOIN")
-        val leftRDD = execute(left, triples)
-        val rightRDD = execute(right, triples)
+        val leftRDD = executePlan(left, triples)
+        val rightRDD = executePlan(right, triples)
         leftRDD
       case logical.Project(projectList, child) =>
         println("PROJECT")
         println(projectList.map(expr => expr.qualifiedName).mkString("--"))
         val childExpressions = expressionsFor(child)
 
-        var rdd = execute(child, triples)
+        var rdd = executePlan(child, triples)
 
-//        if(projectList.size == 1) {
-//          rdd =
-//        }
+        if(projectList.size < childExpressions.size) {
+          val positions = projectList.map(expr => childExpressions.indexOf(expr))
+
+          val r = executePlan(child, triples).map(tuple => extract(tuple, positions))
+          println(r)
+
+        }
 
         rdd
       case logical.Filter(condition, child) =>
         println("FILTER")
-        var rdd = execute(child, triples)
-        condition match {
-          case EqualTo(left: Expression, right: Expression) =>
-            val col = left.asInstanceOf[AttributeReference].name
-            val value = right.toString()
-
-            if(expressionsFor(child).size == 3) {
-              val tmp = rdd.asInstanceOf[RDD[RDFTriple]]
-              rdd = if(col == "subject") {
-                tmp.filter{t => t.subject == value}
-              } else if(col == "predicate") {
-                tmp.filter{t => t.predicate == value}
-              } else {
-                tmp.filter{t => t.`object` == value}
-              }
-              rdd = tmp
-            }
-        }
-
-        rdd
+        val childRDD = executePlan(child, triples)
+        val childExpressions = expressionsFor(child)
+        applyFilter(condition, childExpressions, childRDD)
       case default =>
         println(default.getClass)
         triples
+    }
+  }
+
+  def applyFilter[T <: Product](condition: Expression, childExpressions: List[Expression], rdd: RDD[T]): RDD[T] = {
+    condition match {
+      case And(left: Expression, right: Expression) =>
+        applyFilter(right, childExpressions, applyFilter(left, childExpressions, rdd))
+      case EqualTo(left: Expression, right: Expression) =>
+        val value = right.toString()
+
+        val index = childExpressions.map(e => e.toString()).indexOf(left.toString())
+
+        rdd.filter(t => t.productElement(index) == value)
+      case _ => rdd
+    }
+  }
+
+  def applyFilter2(condition: Expression, childExpressions: List[Expression], rdd: RDD[_]): RDD[_] = {
+    condition match {
+      case And(left: Expression, right: Expression) =>
+        applyFilter2(right, childExpressions, applyFilter2(left, childExpressions, rdd))
+      case EqualTo(left: Expression, right: Expression) =>
+        val col = left.asInstanceOf[AttributeReference].name
+        val value = right.toString()
+
+        if(childExpressions.size == 3) {
+          var tmp = rdd.asInstanceOf[RDD[RDFTriple]]
+          tmp = if(col == "subject") {
+            tmp.filter{t => t.subject == value}
+          } else if(col == "predicate") {
+            tmp.filter{t => t.predicate == value}
+          } else {
+            tmp.filter{t => t.`object` == value}
+          }
+          tmp
+        } else {
+          rdd
+        }
+      case _ => rdd
     }
   }
 
@@ -128,14 +165,20 @@ class PlanExecutorNative(sc: SparkContext) {
       case logical.Project(projectList, child) =>
         projectList.toList
       case logical.Filter(condition, child) =>
-        condition match {
-//          case And(left: Expression, right: Expression) =>
-//            expressionsFor(left) ++ expressionsFor(right)
-          case EqualTo(left: Expression, right: Expression) =>
-            List(left)
-        }
+        expressionsFor(condition)
       case _ =>
         logicalPlan.expressions.toList
+    }
+  }
+
+  def expressionsFor(expr: Expression): List[Expression] = {
+    expr match {
+      case And(left: Expression, right: Expression) =>
+        expressionsFor(left) ++ expressionsFor(right)
+      case EqualTo(left: Expression, right: Expression) =>
+        List(left)
+      case _ =>
+        Nil
     }
   }
 
@@ -229,4 +272,19 @@ class PlanExecutorNative(sc: SparkContext) {
   def mergeJoins(joins: mutable.Set[Join]) = {
     joins.groupBy(join => (join.tp1, join.tp2))
   }
+
+  implicit class EnrichedWithToTuple[A](elements: Seq[A]) {
+    def toTuple: Product = elements.length match {
+      case 2 => toTuple2
+      case 3 => toTuple3
+      case 4 => toTuple2
+      case 5 => toTuple3
+    }
+    def toTuple2 = elements match {case Seq(a, b) => (a, b) }
+    def toTuple3 = elements match {case Seq(a, b, c) => (a, b, c) }
+    def toTuple4 = elements match {case Seq(a, b, c, d) => (a, b, c, d) }
+    def toTuple5 = elements match {case Seq(a, b, c, d, e) => (a, b, c, d, e) }
+
+  }
+
 }

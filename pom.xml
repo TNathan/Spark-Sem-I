@@ -62,6 +62,14 @@
             <version>1.6.0</version>
         </dependency>
 
+        <!-- Shapeless lib -->
+        <dependency>
+            <groupId>com.chuusai</groupId>
+            <artifactId>shapeless_${scala.binary.version}</artifactId>
+            <version>2.3.0</version>
+        </dependency>
+
+
         <!-- Apache JENA 3.x-->
         <dependency>
             <groupId>org.apache.jena</groupId>
