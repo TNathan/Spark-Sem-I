@@ -3,6 +3,7 @@ package org.dissect.inference.rules.plan
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, PrettyAttribute}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.dissect.inference.data.{EmptyRDFGraphDataFrame, RDFGraph, RDFTriple}
 import org.dissect.inference.rules.RDDOperations
@@ -23,36 +24,123 @@ class PlanExecutorNative(sc: SparkContext) {
   val sqlContext = new SQLContext(sc)
   val emptyGraph = EmptyRDFGraphDataFrame.get(sqlContext)
 
-
   def execute(plan: Plan, graph: RDFGraph): RDFGraph = {
     val logicalPlan = plan.toLogicalPlan(sqlContext)
 
     println(logicalPlan.toString())
 
-    execute(logicalPlan)
+    execute(logicalPlan, graph.triples)
 
     graph
   }
 
-  def execute(logicalPlan: LogicalPlan): Unit = {
-      logicalPlan match {
-        case logical.Join(left, right, Inner, Some(condition)) =>
-          println("JOIN")
-          val leftRDD = execute(left)
-          val rightRDD = execute(right)
-        case logical.Project(projectList, child) =>
-          println("PROJECT")
-          println(projectList.map(expr => expr.qualifiedName).mkString("--"))
-          execute(child)
-        case logical.Filter(condition, child) =>
-          println("FILTER")
-          val rdd = execute(child)
-//        case LogicalRDD(output, rdd) =>
-//          println(rdd.name)
-        case default =>
-          println(default)
-          Nil
-      }
+//  def execute(logicalPlan: LogicalPlan, triples: RDD[RDFTriple]): Result = {
+//      logicalPlan match {
+//        case logical.Join(left, right, Inner, Some(condition)) =>
+//          println("JOIN")
+//          val leftRDD = execute(left, triples)
+//          val rightRDD = execute(right, triples)
+//          leftRDD
+//        case logical.Project(projectList, child) =>
+//          println("PROJECT")
+//          println(projectList.map(expr => expr.qualifiedName).mkString("--"))
+//          val rdd = execute(child, triples)
+//          rdd
+//        case logical.Filter(condition, child) =>
+//          println("FILTER")
+//          var res = execute(child, triples)
+//          condition match {
+//            case EqualTo(left: Expression, right: Expression) =>
+//              val col = left.asInstanceOf[AttributeReference].name
+//              val value = right.toString()
+//
+//              if(res.expressions.size == 3) {
+//                var rdd = res.rdd.asInstanceOf[RDD[RDFTriple]]
+//                rdd = if(col == "subject") {
+//                  rdd.filter{t => t.subject == value}
+//                } else if(col == "predicate") {
+//                  rdd.filter{t => t.predicate == value}
+//                } else {
+//                  rdd.filter{t => t.`object` == value}
+//                }
+//                res = Result(res.expressions, rdd)
+//              }
+//
+//          }
+//
+//          rdd
+//        case _ =>
+//          triples
+//      }
+//  }
+
+  def execute(logicalPlan: LogicalPlan, triples: RDD[RDFTriple]): RDD[_] = {
+    logicalPlan match {
+      case logical.Join(left, right, Inner, Some(condition)) =>
+        println("JOIN")
+        val leftRDD = execute(left, triples)
+        val rightRDD = execute(right, triples)
+        leftRDD
+      case logical.Project(projectList, child) =>
+        println("PROJECT")
+        println(projectList.map(expr => expr.qualifiedName).mkString("--"))
+        val childExpressions = expressionsFor(child)
+
+        var rdd = execute(child, triples)
+
+//        if(projectList.size == 1) {
+//          rdd =
+//        }
+
+        rdd
+      case logical.Filter(condition, child) =>
+        println("FILTER")
+        var rdd = execute(child, triples)
+        condition match {
+          case EqualTo(left: Expression, right: Expression) =>
+            val col = left.asInstanceOf[AttributeReference].name
+            val value = right.toString()
+
+            if(expressionsFor(child).size == 3) {
+              val tmp = rdd.asInstanceOf[RDD[RDFTriple]]
+              rdd = if(col == "subject") {
+                tmp.filter{t => t.subject == value}
+              } else if(col == "predicate") {
+                tmp.filter{t => t.predicate == value}
+              } else {
+                tmp.filter{t => t.`object` == value}
+              }
+              rdd = tmp
+            }
+        }
+
+        rdd
+      case default =>
+        println(default.getClass)
+        triples
+    }
+  }
+
+  def expressionsFor(logicalPlan: LogicalPlan): List[Expression] = {
+    logicalPlan match {
+      case logical.Join(left, right, Inner, Some(condition)) =>
+        expressionsFor(left) ++ expressionsFor(right)
+      case logical.Project(projectList, child) =>
+        projectList.toList
+      case logical.Filter(condition, child) =>
+        condition match {
+//          case And(left: Expression, right: Expression) =>
+//            expressionsFor(left) ++ expressionsFor(right)
+          case EqualTo(left: Expression, right: Expression) =>
+            List(left)
+        }
+      case _ =>
+        logicalPlan.expressions.toList
+    }
+  }
+
+  case class Result[T <: Any](expressions: Seq[Expression], rdd: RDD[_]) {
+
   }
 
   def execute2(plan: Plan, graph: RDFGraph): RDFGraph = {
