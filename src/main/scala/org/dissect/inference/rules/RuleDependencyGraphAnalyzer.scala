@@ -12,7 +12,7 @@ import scala.reflect.io.Directory
 import scalax.collection.GraphEdge.DiEdge
 import scalax.collection.GraphTraversal
 import scalax.collection.connectivity.GraphComponents
-import scalax.collection.mutable.Graph
+import scalax.collection.Graph
 import org.dissect.inference.utils.GraphUtils._
 import scalax.collection.connectivity.GraphComponents.graphToComponents
 import scala.reflect.runtime.universe._
@@ -53,6 +53,33 @@ object RuleDependencyGraphAnalyzer {
 
     RuleDependencyGraphAnalyzer.analyze(RuleDependencyGraphGenerator.generate(tRules))
 
+  }
+
+  /**
+    * Computes the high-level rule dependency graph, i.e. it returns a DAG such that each vertex is a subgraph that
+    * is strongly connected.
+    *
+    * @param ruleDependencyGraph the rule dependency graph
+    * @return high-level rule dependency DAG
+    */
+  def computeHighLevelDependencyGraph(ruleDependencyGraph: Graph[Rule, DiEdge]): Graph[Graph[Rule, DiEdge], DiEdge] = {
+    // compute the strongly connected components DAG
+    val sccDag = GraphComponents.graphToComponents(ruleDependencyGraph).stronglyConnectedComponentsDag
+
+    // apply topological sort, i.e. we get layers of nodes where each node denotes a subgraph(i.e. set of rules)
+    // and nodes in layer n have only predecessors in ancestor layers with at least one of them contained in layer n-1
+    sccDag.topologicalSort.fold(
+      cycle => println("Cycle detected:" + cycle),
+      _.toLayered foreach { layer =>
+        println("---" * 3 + "layer " + layer._1 + "---" * 3)
+        layer._2.foreach(node => {
+          val subgraph = node.value
+          print("graph(" + subgraph.nodes.map(_.getName).mkString("|") + ")  ")
+        })
+        println()
+      }
+    )
+    sccDag
   }
 
   def computePlan(rules: Set[Rule]) : Unit = {

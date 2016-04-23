@@ -28,6 +28,10 @@ object RuleDependencyGraphGenerator {
     */
   type RuleDependencyGraph = Graph[Rule, DiEdge]
 
+  implicit class RuleDependencyGraphExt(g: RuleDependencyGraph){
+    def rules() = g.nodes.map(node => node.value)
+  }
+
   /**
     * Generates the rule dependency graph for a given set of rules.
     *
