@@ -2,8 +2,9 @@ package org.dissect.inference.forwardchaining
 
 import org.apache.jena.reasoner.rulesys.Rule
 import org.apache.spark.SparkContext
+import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.dissect.inference.data.RDFGraph
-import org.dissect.inference.rules.{RuleDependencyGraphAnalyzer, RuleDependencyGraphGenerator, RuleExecutorNative}
+import org.dissect.inference.rules.{RuleDependencyGraphAnalyzer, RuleDependencyGraphGenerator, RuleExecutorNative, RuleExecutorSQL}
 import org.slf4j.LoggerFactory
 
 import scala.language.{existentials, implicitConversions}
@@ -15,11 +16,11 @@ import scalax.collection.GraphEdge.DiEdge
   *
   * @author Lorenz Buehmann
   */
-class ForwardRuleReasonerOptimized(sc: SparkContext, rules: Set[Rule]) extends ForwardRuleReasoner{
+class ForwardRuleReasonerOptimizedSQL(sqlContext: SQLContext, rules: Set[Rule]) {
 
   private val logger = com.typesafe.scalalogging.slf4j.Logger(LoggerFactory.getLogger(this.getClass.getName))
 
-  val ruleExecutor = new RuleExecutorNative(sc)
+  val ruleExecutor = new RuleExecutorSQL(sqlContext)
 
   /**
     * Applies forward chaining to the given RDF graph and returns a new RDF graph that contains all additional
@@ -28,9 +29,9 @@ class ForwardRuleReasonerOptimized(sc: SparkContext, rules: Set[Rule]) extends F
     * @param graph the RDF graph
     * @return the materialized RDF graph
     */
-  def apply(graph: RDFGraph): RDFGraph = {
+  def apply(graph: DataFrame): DataFrame = {
 
-    var newGraph = graph.cache()
+    var newGraph = graph
 
     // generate the rule dependency graph
     val dependencyGraph = RuleDependencyGraphGenerator.generate(rules)
@@ -53,21 +54,18 @@ class ForwardRuleReasonerOptimized(sc: SparkContext, rules: Set[Rule]) extends F
       layer._2.foreach{node =>
         val subgraph = node.value
         logger.info("Processing dependency graph " + subgraph.nodes.map(_.getName).mkString("G(", "|", ")"))
-        newGraph = newGraph.union(
-                            new RDFGraph(
-                              applyRules(subgraph.nodes.map(node => node.value).toSeq, newGraph)
-                                .triples
-                                .distinct()
-                                .cache())
-        )
+        newGraph = newGraph
+                    .unionAll(applyRules(subgraph.nodes.map(node => node.value).toSeq, newGraph))
+                    .distinct()
+                    .cache()
       }
     }
 
     // de-duplicate
-    val triples = newGraph.triples.distinct()
+    val triples = newGraph//.distinct()
 
     // return new graph
-    new RDFGraph(triples)
+    triples
   }
 
   /** Layers of a topological order of a graph or of an isolated graph component.
@@ -86,25 +84,22 @@ class ForwardRuleReasonerOptimized(sc: SparkContext, rules: Set[Rule]) extends F
     * @param rules the rules
     * @param graph the graph
     */
-  def applyRules(rules: Seq[Rule], graph: RDFGraph): RDFGraph = {
+  def applyRules(rules: Seq[Rule], graph: DataFrame): DataFrame = {
     var newGraph = graph
 
     var oldCount = 0L
-    var nextCount = newGraph.size
+    var nextCount = newGraph.count()
     do {
       oldCount = nextCount
 
-      newGraph = new RDFGraph(
-        newGraph
-          .union(applyRulesOnce(rules, graph))
-          .triples
-          .distinct()
-          .cache())
-      nextCount = newGraph.size()
+      newGraph = newGraph
+                  .unionAll(applyRulesOnce(rules, newGraph))
+                  .distinct()
+//                  .cache()
+      nextCount = newGraph.count()
     } while (nextCount != oldCount)
 
-    graph
-
+    newGraph
   }
 
   /**
@@ -113,10 +108,10 @@ class ForwardRuleReasonerOptimized(sc: SparkContext, rules: Set[Rule]) extends F
     * @param rules the rules
     * @param graph the graph
     */
-  def applyRulesOnce(rules: Seq[Rule], graph: RDFGraph): RDFGraph = {
+  def applyRulesOnce(rules: Seq[Rule], graph: DataFrame): DataFrame = {
     var newGraph = graph
     rules.foreach {rule =>
-      newGraph = newGraph.union(applyRule(rule, graph))
+      newGraph = newGraph.unionAll(applyRule(rule, newGraph))
     }
     newGraph
   }
@@ -127,7 +122,7 @@ class ForwardRuleReasonerOptimized(sc: SparkContext, rules: Set[Rule]) extends F
     * @param rule the rule
     * @param graph the graph
     */
-  def applyRule(rule: Rule, graph: RDFGraph): RDFGraph = {
+  def applyRule(rule: Rule, graph: DataFrame): DataFrame = {
     logger.debug("Rule:" + rule)
     ruleExecutor.execute(rule, graph)
   }
