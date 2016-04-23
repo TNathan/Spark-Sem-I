@@ -15,7 +15,7 @@ class PlanExecutorSQL(sqlContext: SQLContext) {
 
     // generate SQL query
     val sql = plan.toSQL
-    logger.debug("SQL:" + sql)
+    logger.info("SQL:" + sql)
 
     // execute the query
     val results = sqlContext.sql(sql)

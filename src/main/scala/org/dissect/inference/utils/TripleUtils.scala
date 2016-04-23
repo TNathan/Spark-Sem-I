@@ -74,6 +74,9 @@ object TripleUtils {
     ret
   }
 
+  def nodes(tp: org.apache.jena.graph.Triple): List[Node] = List[Node](tp.getSubject, tp.getPredicate, tp.getObject)
+
+
   implicit class TriplePatternExtension(val tp: TriplePattern) {
     def toTriple = {
       val s = alignVarNode(tp.getSubject)

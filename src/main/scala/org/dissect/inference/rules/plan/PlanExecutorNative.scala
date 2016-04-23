@@ -85,6 +85,11 @@ class PlanExecutorNative(sc: SparkContext) {
     newList
   }
 
+  def genMapper[A, B](f: A => B): A => B = {
+    val locker = com.twitter.chill.MeatLocker(f)
+    x => locker.get.apply(x)
+  }
+
   def executePlan[T <: Product](logicalPlan: LogicalPlan, triples: RDD[T]): RDD[T] = {
     logicalPlan match {
       case logical.Join(left, right, Inner, Some(condition)) =>
@@ -102,7 +107,7 @@ class PlanExecutorNative(sc: SparkContext) {
         if(projectList.size < childExpressions.size) {
           val positions = projectList.map(expr => childExpressions.indexOf(expr))
 
-          val r = executePlan(child, triples).map(tuple => extract(tuple, positions))
+          val r = executePlan(child, triples) map genMapper(tuple => extract(tuple, positions))
           println(r)
 
         }

@@ -8,7 +8,7 @@ import org.apache.spark.sql.catalyst.optimizer.DefaultOptimizer
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.{QueryExecution, SparkSQLParser}
 import org.apache.spark.sql.execution.datasources.DDLParser
-import org.dissect.inference.utils.RuleUtils
+import org.dissect.inference.utils.{RuleUtils, TripleUtils}
 
 import scala.collection.mutable
 
@@ -66,20 +66,28 @@ case class Plan(triplePatterns: Set[Triple], target: Triple, joins: mutable.Set[
   def projectionPart(): String = {
     var sql = ""
 
-    val requiredVars = RuleUtils.varsOf(target)
+    val requiredVars = TripleUtils.nodes(target)
 
     val expressions = mutable.ArrayBuffer[String]()
 
+//    expressions += (if(target.getSubject.isVariable) expressionFor(target.getSubject, target) else target.getSubject.toString)
+//    expressions += (if(target.getPredicate.isVariable) expressionFor(target.getPredicate, target) else target.getPredicate.toString)
+//    expressions += (if(target.getObject.isVariable) expressionFor(target.getObject, target) else target.getObject.toString)
+
     requiredVars.foreach{ v =>
-      var done = false
+      if(v.isVariable) {
+        var done = false
 
-      for(tp <- triplePatterns; if !done) {
-        val expr = expressionFor(v, tp)
+        for(tp <- triplePatterns; if !done) {
+          val expr = expressionFor(v, tp)
 
-        if(expr != "NULL") {
-          expressions += expr
-          done = true
+          if(expr != "NULL") {
+            expressions += expr
+            done = true
+          }
         }
+      } else {
+        expressions += "'" + v.toString + "'"
       }
     }
 
