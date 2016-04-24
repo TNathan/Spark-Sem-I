@@ -1,16 +1,12 @@
 package org.dissect.inference.rules
 
-import org.apache.jena.reasoner.TriplePattern
 import org.apache.jena.reasoner.rulesys.Rule
 import org.apache.jena.vocabulary.RDFS
 import org.dissect.inference.utils.RuleUtils
-
-import scala.collection.JavaConversions._
-import scala.language.{existentials, implicitConversions}
-import scalax.collection.GraphEdge.DiEdge
-import scalax.collection.GraphPredef._
-import scalax.collection.mutable.Graph
 import org.dissect.inference.utils.RuleUtils._
+
+import scala.language.{existentials, implicitConversions}
+import scalax.collection.GraphPredef._
 
 /**
   * A generator for a so-called dependency graph based on a given set of rules.
@@ -22,16 +18,6 @@ import org.dissect.inference.utils.RuleUtils._
   */
 object RuleDependencyGraphGenerator {
 
-
-  /**
-    * A rule dependency graph is a directed graph representing dependencies of rules towards each other.
-    */
-  type RuleDependencyGraph = Graph[Rule, DiEdge]
-
-  implicit class RuleDependencyGraphExt(g: RuleDependencyGraph){
-    def rules() = g.nodes.map(node => node.value)
-  }
-
   /**
     * Generates the rule dependency graph for a given set of rules.
     *
@@ -41,7 +27,7 @@ object RuleDependencyGraphGenerator {
     */
   def generate(rules: Set[Rule], f:(Rule, Rule) => Boolean = dependsOn): RuleDependencyGraph = {
     // create empty graph
-    val g = Graph[Rule, DiEdge]()
+    val g = new RuleDependencyGraph()
 
     // add edge for each rule r1 that depends on another rule r2
     for (r1 <- rules; r2 <- rules) {
@@ -85,30 +71,5 @@ object RuleDependencyGraphGenerator {
     }
 
     ret
-  }
-
-  def main(args: Array[String]) {
-
-    // load the rules
-    val filename = "rules/rdfs-simple.rules"
-    val rules = RuleUtils.load(filename).toSet
-
-    // generate graph
-    val g = RuleDependencyGraphGenerator.generate(rules)
-
-    // check for cycles
-    val cycle = g.findCycle
-    println("Cycle found: " + cycle.nonEmpty)
-
-    // topological sort
-    g.topologicalSort.fold(
-      cycleNode => println("Cycle detected: " + cycleNode.value.getName),
-      _.toLayered foreach { layer =>
-        println("---" * 3 + "layer " + layer._1 + "---" * 3)
-        layer._2.foreach(node => print(node.value.getName + " "))
-        println()
-      }
-    )
-
   }
 }
