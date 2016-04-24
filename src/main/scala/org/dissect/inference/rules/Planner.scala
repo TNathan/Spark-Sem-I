@@ -30,7 +30,7 @@ object Planner {
   def generatePlan(rule: Rule) = {
     println("Rule: " + rule)
 
-    val body = rule.bodyTriplePatterns.map(tp => tp.toTriple).toSet
+    val body = rule.bodyTriplePatterns().map(tp => tp.toTriple).toSet
 
     val visited = mutable.Set[org.apache.jena.graph.Triple]()
 

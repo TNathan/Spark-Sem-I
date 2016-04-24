@@ -162,7 +162,7 @@ object RuleDependencyGraphAnalyzer {
       }
 
       // generate graph
-      val g = RuleDependencyGraphGenerator.generate(rules.toSet)
+      val g = RuleDependencyGraphGenerator.generate(rules)
 
       // analyze graph
       RuleDependencyGraphAnalyzer.analyze(rules)

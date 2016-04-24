@@ -3,7 +3,7 @@ package org.dissect.inference.forwardchaining
 import org.apache.jena.reasoner.rulesys.Rule
 import org.apache.spark.SparkContext
 import org.dissect.inference.data.RDFGraph
-import org.dissect.inference.rules.{RuleDependencyGraphAnalyzer, RuleDependencyGraphGenerator, RuleExecutorNative}
+import org.dissect.inference.rules._
 import org.slf4j.LoggerFactory
 
 import scala.language.{existentials, implicitConversions}
@@ -36,31 +36,15 @@ class ForwardRuleReasonerOptimized(sc: SparkContext, rules: Set[Rule]) extends F
     val dependencyGraph = RuleDependencyGraphGenerator.generate(rules)
 
     // generate the high-level dependency graph
-    val highLevelDependencyGraph = RuleDependencyGraphAnalyzer.computeHighLevelDependencyGraph(dependencyGraph)
+    val highLevelDependencyGraph = HighLevelRuleDependencyGraphGenerator.generate(dependencyGraph)
 
-    // apply topological sort
-    val layers = highLevelDependencyGraph.topologicalSort.right.get.toLayered
+    // apply topological sort and get the layers
+    val layers = highLevelDependencyGraph.layers()
 
     // each layer contains a set of rule dependency graphs
     // for each layer we process those
     layers foreach { layer =>
-      logger.info("Processing layer " + layer._1 + "---" * 10)
-      logger.info(layer._2
-        .map(sub => sub.value)
-        .map((g: Graph[Rule, DiEdge]) => g.nodes.map(node => node.value.getName).mkString("G(", "|", ")"))
-        .mkString("--"))
-
-      layer._2.foreach{node =>
-        val subgraph = node.value
-        logger.info("Processing dependency graph " + subgraph.nodes.map(_.getName).mkString("G(", "|", ")"))
-        newGraph = newGraph.union(
-                            new RDFGraph(
-                              applyRules(subgraph.nodes.map(node => node.value).toSeq, newGraph)
-                                .triples
-                                .distinct()
-                                .cache())
-        )
-      }
+      newGraph = newGraph.union(processLayer(layer, graph))
     }
 
     // de-duplicate
@@ -70,14 +54,23 @@ class ForwardRuleReasonerOptimized(sc: SparkContext, rules: Set[Rule]) extends F
     new RDFGraph(triples)
   }
 
-  /** Layers of a topological order of a graph or of an isolated graph component.
-    * The layers of a topological sort can roughly be defined as follows:
-    * a. layer 0 contains all nodes having no predecessors,
-    * a. layer n contains those nodes that have only predecessors in anchestor layers
-    * with at least one of them contained in layer n - 1
-    */
-  def toLayers(g: Graph[Rule, DiEdge]) = {
-    g.topologicalSort.right.get.toLayered
+  def processLayer(layer: (Int, Iterable[RuleDependencyGraph]), graph: RDFGraph) = {
+    logger.info("Processing layer " + layer._1 + "---" * 10)
+    logger.info(layer._2.map(rdg => rdg.printNodes()).mkString("--"))
+
+    var newGraph = graph
+
+    layer._2.foreach{rdg =>
+      logger.info("Processing dependency graph " + rdg.printNodes())
+      newGraph = newGraph.union(
+        new RDFGraph(
+          applyRules(rdg.rules().toSeq, newGraph)
+            .triples
+            .distinct()
+            .cache())
+      )
+    }
+    newGraph
   }
 
   /**

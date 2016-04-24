@@ -68,19 +68,19 @@ object SetOfRulesTest {
 //
 //    RDFGraphWriter.writeToFile(res1, "/tmp/spark-tests/naive")
 
-//    val reasoner2 = new ForwardRuleReasonerOptimized(sc, rules.toSet)
-//
-//    val res2 = reasoner2.apply(graph)
-//
-//    RDFGraphWriter.writeToFile(res2, "/tmp/spark-tests/optimized-native")
+    val reasoner2 = new ForwardRuleReasonerOptimized(sc, rules.toSet)
 
-    val sqlContext = new SQLContext(sc)
-    val df = graph.toDataFrame(sqlContext).cache()
-    val reasoner3 = new ForwardRuleReasonerOptimizedSQL(sqlContext, rules.toSet)
-sqlContext.cacheTable("TRIPLES")
-    val res3 = reasoner3.apply(df)
+    val res2 = reasoner2.apply(graph)
 
-    RDFGraphWriter.writeToFile(res3, "/tmp/spark-tests/optimized-sql")
+    RDFGraphWriter.writeToFile(res2, "/tmp/spark-tests/optimized-native")
+
+//    val sqlContext = new SQLContext(sc)
+//    val df = graph.toDataFrame(sqlContext).cache()
+//    val reasoner3 = new ForwardRuleReasonerOptimizedSQL(sqlContext, rules.toSet)
+//sqlContext.cacheTable("TRIPLES")
+//    val res3 = reasoner3.apply(df)
+//
+//    RDFGraphWriter.writeToFile(res3, "/tmp/spark-tests/optimized-sql")
 
     sc.stop()
   }
