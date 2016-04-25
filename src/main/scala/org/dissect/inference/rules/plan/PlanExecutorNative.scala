@@ -27,7 +27,7 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
 
     println(logicalPlan.toString())
 
-    val result = executePlan(logicalPlan, graph.toRDD())
+    val result = executePlan(logicalPlan, graph.toRDD().asInstanceOf[RDD[Product]])
 
     new RDFGraphNative(graph.toRDD())
   }
@@ -83,13 +83,34 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
     x => locker.get.apply(x)
   }
 
-  def executePlan[T <: Product](logicalPlan: LogicalPlan, triples: RDD[T]): RDD[T] = {
+  def toPairRDD[T >: Product](tuples: RDD[Product], joinPositions: Seq[Int]): RDD[(Product, Product)] = {
+    tuples.map{t =>
+      val key = joinPositions.map(pos => t.productElement(pos)).toTuple
+      val value = for (i <- 0 to t.productArity; !joinPositions.contains(i)) yield t.productElement(i)
+
+      (key -> value.toTuple)
+    }
+  }
+
+  def executePlan[T >: Product, U <: Product](logicalPlan: LogicalPlan, triples: RDD[Product]): RDD[Product] = {
     logicalPlan match {
       case logical.Join(left, right, Inner, Some(condition)) =>
         println("JOIN")
         val leftRDD = executePlan(left, triples)
         val rightRDD = executePlan(right, triples)
-        leftRDD
+
+        val joinExpressions = expressionsFor(condition)
+
+        val leftExpressions = expressionsFor(left)
+        val rightExpressions = expressionsFor(right)
+
+        val joinExpressionsLeft = leftExpressions.intersect(joinExpressions)
+        val joinExpressionsRight = rightExpressions.intersect(joinExpressions)
+
+        val joinPositionsLeft = joinExpressionsLeft.map(expr => leftExpressions.indexOf(expr))
+        val joinPositionsRight = joinExpressionsRight.map(expr => rightExpressions.indexOf(expr))
+
+        toPairRDD(leftRDD, joinPositionsLeft).join(toPairRDD(rightRDD, joinPositionsRight))
       case logical.Project(projectList, child) =>
         println("PROJECT")
         println(projectList.map(expr => expr.qualifiedName).mkString("--"))
@@ -100,7 +121,39 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
         if(projectList.size < childExpressions.size) {
           val positions = projectList.map(expr => childExpressions.indexOf(expr))
 
-          val r = executePlan(child, triples) map genMapper(tuple => extract(tuple, positions))
+          rdd = rdd map genMapper(tuple => extract(tuple, positions))
+        }
+
+        rdd
+      case logical.Filter(condition, child) =>
+        println("FILTER")
+        val childRDD = executePlan(child, triples)
+        val childExpressions = expressionsFor(child)
+        applyFilter(condition, childExpressions, childRDD)
+      case default =>
+        println(default.simpleString)
+        triples
+    }
+  }
+
+  def executePlan2[T <: Product](logicalPlan: LogicalPlan, triples: RDD[T]): RDD[T] = {
+    logicalPlan match {
+      case logical.Join(left, right, Inner, Some(condition)) =>
+        println("JOIN")
+        val leftRDD = executePlan2(left, triples)
+        val rightRDD = executePlan2(right, triples)
+        leftRDD
+      case logical.Project(projectList, child) =>
+        println("PROJECT")
+        println(projectList.map(expr => expr.qualifiedName).mkString("--"))
+        val childExpressions = expressionsFor(child)
+
+        var rdd = executePlan2(child, triples)
+
+        if(projectList.size < childExpressions.size) {
+          val positions = projectList.map(expr => childExpressions.indexOf(expr))
+
+          val r = executePlan2(child, triples) map genMapper(tuple => extract(tuple, positions))
           println(r)
 
         }
@@ -108,7 +161,7 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
         rdd
       case logical.Filter(condition, child) =>
         println("FILTER")
-        val childRDD = executePlan(child, triples)
+        val childRDD = executePlan2(child, triples)
         val childExpressions = expressionsFor(child)
         applyFilter(condition, childExpressions, childRDD)
       case default =>
@@ -275,8 +328,8 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
     def toTuple: Product = elements.length match {
       case 2 => toTuple2
       case 3 => toTuple3
-      case 4 => toTuple2
-      case 5 => toTuple3
+      case 4 => toTuple4
+      case 5 => toTuple5
     }
     def toTuple2 = elements match {case Seq(a, b) => (a, b) }
     def toTuple3 = elements match {case Seq(a, b, c) => (a, b, c) }
@@ -284,5 +337,13 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
     def toTuple5 = elements match {case Seq(a, b, c, d, e) => (a, b, c, d, e) }
 
   }
+
+  abstract class AbstractSolutionMapping[K, V]() {
+    val var2Value = mutable.HashMap[K, V]()
+
+    def addMapping(variable: K, value: V) = var2Value += variable -> value
+  }
+
+  class SolutionMapping extends AbstractSolutionMapping[String, String]
 
 }
