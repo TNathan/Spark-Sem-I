@@ -1,8 +1,8 @@
 package org.dissect.inference.rules
 
-import org.apache.jena.reasoner.rulesys.Rule
 import org.apache.spark.SparkContext
-import org.dissect.inference.data.RDFGraph
+import org.apache.spark.rdd.RDD
+import org.dissect.inference.data.{RDFGraphNative, RDFTriple}
 import org.dissect.inference.rules.plan.PlanExecutorNative
 
 /**
@@ -10,20 +10,6 @@ import org.dissect.inference.rules.plan.PlanExecutorNative
   *
   * @author Lorenz Buehmann
   */
-class RuleExecutorNative(sc: SparkContext) {
+class RuleExecutorNative(sc: SparkContext) extends RuleExecutor[RDD[RDFTriple], RDFGraphNative](new PlanExecutorNative(sc)){
 
-  val planGenerator = Planner
-
-  val planExecutor = new PlanExecutorNative(sc)
-
-  def execute(rule: Rule, graph: RDFGraph): RDFGraph = {
-
-    // generate execution plan
-    val plan = planGenerator.generatePlan(rule)
-
-    // apply rule
-    val result = planExecutor.execute(plan, graph)
-
-    result
-  }
 }
