@@ -3,7 +3,7 @@ package org.dissect.inference.rules
 import org.apache.jena.vocabulary.{OWL2, RDF}
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkConf, SparkContext}
-import org.dissect.inference.data.{RDFGraph, RDFGraphWriter, RDFTriple}
+import org.dissect.inference.data._
 import org.dissect.inference.rules.plan.{PlanExecutorNative, PlanExecutorSQL}
 import org.dissect.inference.utils.RuleUtils
 
@@ -58,7 +58,7 @@ object TransitivityRuleTest {
 
     val triplesRDD = sc.parallelize(triples.toSeq, 2)
 
-    val graph = new RDFGraph(triplesRDD)
+    val graph = new RDFGraphNative(triplesRDD)
 
     // 1. the hard-coded reasoner
 
@@ -80,7 +80,7 @@ object TransitivityRuleTest {
 
     val planExecutor1 = new PlanExecutorNative(sc)
     val res2 = planExecutor1.execute(plan, graph)
-    RDFGraphWriter.writeToFile(res2, "/tmp/spark-tests/native")
+    RDFGraphWriter.writeToFile(res2.toRDD(), "/tmp/spark-tests/native")
 
 
     // 3. the SQL based rule executor
@@ -89,10 +89,10 @@ object TransitivityRuleTest {
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
 
     // create a DataFrame
-    val df = graph.toDataFrame(sqlContext)
+    val df = new RDFGraphDataFrame(graph.toDataFrame(sqlContext))
     val planExecutor2 = new PlanExecutorSQL(sqlContext)
     val res3 = planExecutor2.execute(plan, df)
-    RDFGraphWriter.writeToFile(res3, "/tmp/spark-tests/sql")
+    RDFGraphWriter.writeToFile(res3.toRDD(), "/tmp/spark-tests/sql")
 
     sc.stop()
   }
