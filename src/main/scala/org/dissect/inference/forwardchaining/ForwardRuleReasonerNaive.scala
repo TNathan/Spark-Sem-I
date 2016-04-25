@@ -2,7 +2,8 @@ package org.dissect.inference.forwardchaining
 
 import org.apache.jena.reasoner.rulesys.Rule
 import org.apache.spark.SparkContext
-import org.dissect.inference.data.RDFGraph
+import org.apache.spark.rdd.RDD
+import org.dissect.inference.data.{RDFGraph, RDFGraphNative, RDFTriple}
 import org.dissect.inference.rules.RuleExecutorNative
 import org.slf4j.LoggerFactory
 
@@ -13,7 +14,7 @@ import scala.language.{existentials, implicitConversions}
   *
   * @author Lorenz Buehmann
   */
-class ForwardRuleReasonerNaive(sc: SparkContext, rules: Set[Rule]) extends ForwardRuleReasoner{
+class ForwardRuleReasonerNaive(sc: SparkContext, rules: Set[Rule]) extends AbstractForwardRuleReasoner[RDD[RDFTriple], RDFGraphNative]{
 
   private val logger = com.typesafe.scalalogging.slf4j.Logger(LoggerFactory.getLogger(this.getClass.getName))
 
@@ -26,25 +27,22 @@ class ForwardRuleReasonerNaive(sc: SparkContext, rules: Set[Rule]) extends Forwa
     * @param graph the RDF graph
     * @return the materialized RDF graph
     */
-  def apply(graph: RDFGraph): RDFGraph = {
+  def apply(graph: RDFGraphNative): RDFGraphNative = {
 
-    var currentGraph = graph.cache()
+    var currentGraph = graph
 
     var iteration = 0
 
     var oldCount = 0L
-    var nextCount = currentGraph.size
+    var nextCount = currentGraph.size()
     do {
       iteration += 1
       logger.debug("Iteration " + iteration)
       oldCount = nextCount
 
-      currentGraph = new RDFGraph(
-        currentGraph
-        .union(applyRules(graph))
-          .triples
-          .distinct()
-          .cache())
+      currentGraph = currentGraph.union(applyRules(graph)).distinct()
+      currentGraph.cache()
+
       nextCount = currentGraph.size()
     } while (nextCount != oldCount)
 
@@ -56,7 +54,7 @@ class ForwardRuleReasonerNaive(sc: SparkContext, rules: Set[Rule]) extends Forwa
     *
     * @param graph the graph
     */
-  def applyRules(graph: RDFGraph): RDFGraph = {
+  def applyRules(graph: RDFGraphNative): RDFGraphNative = {
     var newGraph = graph
     rules.foreach {rule =>
       newGraph = newGraph.union(applyRule(rule, graph))
@@ -70,7 +68,7 @@ class ForwardRuleReasonerNaive(sc: SparkContext, rules: Set[Rule]) extends Forwa
     * @param rule the rule
     * @param graph the graph
     */
-  def applyRule(rule: Rule, graph: RDFGraph): RDFGraph = {
+  def applyRule(rule: Rule, graph: RDFGraphNative): RDFGraphNative = {
     logger.debug("Rule:" + rule)
     ruleExecutor.execute(rule, graph)
   }
