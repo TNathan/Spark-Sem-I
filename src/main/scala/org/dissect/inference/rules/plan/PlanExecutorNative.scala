@@ -3,40 +3,33 @@ package org.dissect.inference.rules.plan
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, PrettyAttribute}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.dissect.inference.data.{EmptyRDFGraphDataFrame, RDFGraph, RDFTriple}
+import org.apache.spark.sql.catalyst.plans.{Inner, logical}
+import org.dissect.inference.data._
 import org.dissect.inference.rules.RDDOperations
 import org.dissect.inference.utils.TripleUtils
 
 import scala.collection.mutable
-import org.apache.spark.sql.catalyst.plans
-import org.apache.spark.sql.catalyst.plans.{Inner, logical}
-import org.apache.spark.sql.execution.LogicalRDD
-
-import shapeless._
-import HList._
-import syntax.std.traversable._
-import syntax.std.product._
 
 /**
   * An executor that works on the the native Scala data structures and uses Spark joins, filters etc.
   *
   * @author Lorenz Buehmann
   */
-class PlanExecutorNative(sc: SparkContext) {
+class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], RDFGraphNative]{
 
   val sqlContext = new SQLContext(sc)
   val emptyGraph = EmptyRDFGraphDataFrame.get(sqlContext)
 
-  def execute(plan: Plan, graph: RDFGraph): RDFGraph = {
+  def execute(plan: Plan, graph: RDFGraphNative): RDFGraphNative = {
     val logicalPlan = plan.toLogicalPlan(sqlContext)
 
     println(logicalPlan.toString())
 
-    executePlan(logicalPlan, graph.triples)
+    val result = executePlan(logicalPlan, graph.toRDD())
 
-    graph
+    new RDFGraphNative(graph.toRDD())
   }
 
 //  def execute(logicalPlan: LogicalPlan, triples: RDD[RDFTriple]): Result = {
@@ -191,7 +184,7 @@ class PlanExecutorNative(sc: SparkContext) {
 
   }
 
-  def execute2(plan: Plan, graph: RDFGraph): RDFGraph = {
+  def execute2(plan: Plan, graph: RDFGraphNative): RDFGraphNative = {
     println("JOIN CANDIDATES:\n" + plan.joins.mkString("\n"))
 
     // for each triple pattern compute the relation first
