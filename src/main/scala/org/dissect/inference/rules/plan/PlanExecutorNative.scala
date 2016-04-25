@@ -11,6 +11,7 @@ import org.dissect.inference.rules.RDDOperations
 import org.dissect.inference.utils.TripleUtils
 
 import scala.collection.mutable
+import scala.collection.mutable.ListBuffer
 
 /**
   * An executor that works on the the native Scala data structures and uses Spark joins, filters etc.
@@ -83,13 +84,34 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
     x => locker.get.apply(x)
   }
 
-  def toPairRDD[T >: Product](tuples: RDD[Product], joinPositions: Seq[Int]): RDD[(Product, Product)] = {
-    tuples.map{t =>
-      val key = joinPositions.map(pos => t.productElement(pos)).toTuple
-      val value = for (i <- 0 to t.productArity; !joinPositions.contains(i)) yield t.productElement(i)
+  def asKeyValue(tuple: Product, keyPositions: Seq[Int]): (Product, Product) = {
+    val key = keyPositions.map(pos => tuple.productElement(pos)).toTuple
+    val value = for (i <- 0 to tuple.productArity; if !keyPositions.contains(i)) yield tuple.productElement(i)
 
-      (key -> value.toTuple)
+    (key -> value.toTuple)
+  }
+
+  def toPairRDD[T >: Product](tuples: RDD[Product], joinPositions: Seq[Int]): RDD[(Product, Product)] = {
+    tuples map genMapper(t => asKeyValue(t, joinPositions))
+  }
+
+  def mergeKeyValue(pair: (Product, Product), joinPositions: Seq[Int]): Product = {
+    val list = new ListBuffer[Any]
+    for(i <- 0 to pair._1.productArity) {
+      list.insert(joinPositions(i), pair._1.productElement(i))
     }
+
+    for(i <- 0 to pair._2.productArity) {
+      list += pair._2.productElement(i)
+    }
+
+    val it = pair._1.productIterator ++ pair._2.productIterator
+
+    list.toTuple
+  }
+
+  def mergedRDD(tuples: RDD[(Product, Product)], joinPositions: Seq[Int]) = RDD[Product] = {
+    tuples map genMapper(t => mergeKeyValue(t, joinPositions))
   }
 
   def executePlan[T >: Product, U <: Product](logicalPlan: LogicalPlan, triples: RDD[Product]): RDD[Product] = {
@@ -110,7 +132,15 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
         val joinPositionsLeft = joinExpressionsLeft.map(expr => leftExpressions.indexOf(expr))
         val joinPositionsRight = joinExpressionsRight.map(expr => rightExpressions.indexOf(expr))
 
-        toPairRDD(leftRDD, joinPositionsLeft).join(toPairRDD(rightRDD, joinPositionsRight))
+        val l = toPairRDD(leftRDD, joinPositionsLeft)
+        val r = toPairRDD(rightRDD, joinPositionsRight)
+
+        val joinedRDD = l.join(r)
+
+        // map it back to tuples
+
+        val merged = mergedRDD(joinedRDD, joinPositionsLeft)
+        leftRDD
       case logical.Project(projectList, child) =>
         println("PROJECT")
         println(projectList.map(expr => expr.qualifiedName).mkString("--"))
