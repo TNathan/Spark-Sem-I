@@ -1,6 +1,6 @@
 package org.dissect.inference.rules
 
-import org.apache.jena.vocabulary.{OWL2, RDF}
+import org.apache.jena.vocabulary.{OWL2, RDF, RDFS}
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkConf, SparkContext}
 import org.dissect.inference.data.{RDFGraph, RDFGraphNative, RDFGraphWriter, RDFTriple}
@@ -32,6 +32,7 @@ object SetOfRulesTest {
     val p3 = ns + "p3"
     triples += RDFTriple(p1, RDF.`type`.getURI, OWL2.TransitiveProperty.getURI)
     triples += RDFTriple(p2, RDF.`type`.getURI, OWL2.TransitiveProperty.getURI)
+    triples += RDFTriple(p1, RDFS.subPropertyOf.getURI, p2)
 
     val scale = 1
 
@@ -60,7 +61,7 @@ object SetOfRulesTest {
 
     val graph = new RDFGraphNative(triplesRDD)
 
-    val rules = RuleUtils.load("rdfs-simple.rules")
+    val rules = RuleUtils.load("rdfs-simple.rules").filter(r => r.getName == "prp-trp")
 
 //    val reasoner1 = new ForwardRuleReasonerNaive(sc, rules.toSet)
 //

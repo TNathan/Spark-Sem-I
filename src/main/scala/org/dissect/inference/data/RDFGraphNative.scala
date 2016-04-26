@@ -11,7 +11,7 @@ import org.apache.spark.sql.{DataFrame, Row, SQLContext}
   * @author Lorenz Buehmann
   *
   */
-class RDFGraphNative(var triples: RDD[RDFTriple]) extends AbstractRDFGraph[RDD[RDFTriple], RDFGraphNative](triples){
+class RDFGraphNative(val triples: RDD[RDFTriple]) extends AbstractRDFGraph[RDD[RDFTriple], RDFGraphNative](triples){
 
   /**
     * Returns an RDD of triples that match with the given input.
