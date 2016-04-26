@@ -10,6 +10,7 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.plans.{Inner, logical}
 import org.dissect.inference.data._
 import org.dissect.inference.rules.RDDOperations
+import org.dissect.inference.utils.logging.Logging
 import org.dissect.inference.utils.{TripleUtils, Tuple0}
 
 import scala.collection.mutable
@@ -21,7 +22,7 @@ import collection.JavaConversions._
   *
   * @author Lorenz Buehmann
   */
-class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], RDFGraphNative]{
+class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], RDFGraphNative] with Logging{
 
   val sqlContext = new SQLContext(sc)
   val emptyGraph = EmptyRDFGraphDataFrame.get(sqlContext)
@@ -41,49 +42,49 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
   def executePlan[T >: Product, U <: Product](logicalPlan: LogicalPlan, triples: RDD[Product]): RDD[Product] = {
     logicalPlan match {
       case logical.Join(left, right, Inner, Some(condition)) =>
-        println("JOIN")
+        trace("JOIN")
         val leftRDD = executePlan(left, triples)
         val rightRDD = executePlan(right, triples)
-        println("L:\n" + leftRDD.collect().mkString("\n"))
-        println("R:\n" + rightRDD.collect().mkString("\n"))
+        trace("L:\n" + leftRDD.collect().mkString("\n"))
+        trace("R:\n" + rightRDD.collect().mkString("\n"))
 
         val joinExpressions = expressionsFor(condition, true).map(e => e.simpleString)
-        println("JOIN EXPR:" + joinExpressions)
+        trace("JOIN EXPR:" + joinExpressions)
 
         val leftExpressions = expressionsFor(left).map(e => e.simpleString)
         val rightExpressions = expressionsFor(right).map(e => e.simpleString)
-        println("EXPR L:" + leftExpressions)
-        println("EXPR R:" + rightExpressions)
+        trace("EXPR L:" + leftExpressions)
+        trace("EXPR R:" + rightExpressions)
 
         val joinExpressionsLeft = joinExpressions.intersect(leftExpressions)
         val joinExpressionsRight = joinExpressions.filter(expr => rightExpressions.contains(expr))
-        println("JOIN EXPR L:" + joinExpressionsLeft)
-        println("JOIN EXPR R:" + joinExpressionsRight)
+        trace("JOIN EXPR L:" + joinExpressionsLeft)
+        trace("JOIN EXPR R:" + joinExpressionsRight)
 
         val joinPositionsLeft = joinExpressionsLeft.map(expr => leftExpressions.indexOf(expr))
         val joinPositionsRight = joinExpressionsRight.map(expr => rightExpressions.indexOf(expr))
-        println("JOIN POS L:" + joinPositionsLeft)
-        println("JOIN POS R:" + joinPositionsRight)
+        trace("JOIN POS L:" + joinPositionsLeft)
+        trace("JOIN POS R:" + joinPositionsRight)
 
         // convert to PairRDDs
         val l = toPairRDD(leftRDD, joinPositionsLeft)
         val r = toPairRDD(rightRDD, joinPositionsRight)
-        println("L PAIR:\n" + l.collect().mkString("\n"))
-        println("R PAIR:\n" + r.collect().mkString("\n"))
+        trace("L PAIR:\n" + l.collect().mkString("\n"))
+        trace("R PAIR:\n" + r.collect().mkString("\n"))
 
         // perform join
         val joinedRDD = l.join(r)
-        println("JOINED\n" + joinedRDD.collect().mkString("\n"))
+        trace("JOINED\n" + joinedRDD.collect().mkString("\n"))
 
         // map it back to tuples
         val merged = mergedRDD(joinedRDD, joinPositionsLeft)
 
-        println("MERGED\n" + merged.collect().mkString("\n"))
+        trace("MERGED\n" + merged.collect().mkString("\n"))
         merged
       case logical.Project(projectList, child) =>
         var rdd = executePlan(child, triples)
-        println("PROJECT")
-        println(projectList.map(expr => expr.asInstanceOf[AttributeReference].simpleString).mkString(","))
+        trace("PROJECT")
+        trace(projectList.map(expr => expr.asInstanceOf[AttributeReference].simpleString).mkString(","))
 
         var projectionVars: Seq[Expression] = projectList
 
@@ -139,16 +140,16 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
         })
           .map(expr => expr.asInstanceOf[AttributeReference].simpleString)
 
-        println("CHILD EXPR:" + childExpressions)
-        println("PROJECTION VARS:" + projectionVars)
+        trace("CHILD EXPR:" + childExpressions)
+        trace("PROJECTION VARS:" + projectionVars)
 
         val availableExpressionsReal = childExpressions.distinct
-        println("CHILD EXPR(REAL):" + projectionVars)
+        trace("CHILD EXPR(REAL):" + projectionVars)
 
         if(projectionVars.size < childExpressions.size) {
           val positions = projectionVars.map(expr => availableExpressionsReal.indexOf(expr.asInstanceOf[AttributeReference].simpleString))
 
-          println("EXTR POSITIONS:" + positions)
+          trace("EXTR POSITIONS:" + positions)
 
           rdd = rdd map genMapper(tuple => extract(tuple, positions))
         } else if(projectionVars.size > childExpressions.size) {
@@ -156,7 +157,7 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
         } else {
           val positions = projectionVars.map(expr => availableExpressionsReal.indexOf(expr.asInstanceOf[AttributeReference].simpleString))
 
-          println("EXTR POSITIONS:" + positions)
+          trace("EXTR POSITIONS:" + positions)
 
           rdd = rdd map genMapper(tuple => extract(tuple, positions))
         }
@@ -209,7 +210,7 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
 
   def mergeKeyValue(pair: (Product, (Product, Product)), joinPositions: Seq[Int]): Product = {
     val list = new util.LinkedList[Any]()
-    println("PAIR:" + pair)
+//    println("PAIR:" + pair)
 
     for(i <- 0 until pair._2._1.productArity) {
       list.add(pair._2._1.productElement(i))
@@ -228,7 +229,7 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
   }
 
   def mergedRDD(tuples: RDD[(Product, (Product, Product))], joinPositions: Seq[Int]): RDD[Product] = {
-    println("JOIN POS:" + joinPositions)
+    trace("JOIN POS:" + joinPositions)
     tuples map genMapper(t => mergeKeyValue(t, joinPositions))
   }
 
