@@ -29,6 +29,8 @@ object RuleDependencyGraphGenerator {
     // create empty graph
     val g = new RuleDependencyGraph()
 
+    rules.foreach(r => g.add(r))
+
     // add edge for each rule r1 that depends on another rule r2
     for (r1 <- rules; r2 <- rules) {
       if (f(r1, r2)) // r1 depends on r2

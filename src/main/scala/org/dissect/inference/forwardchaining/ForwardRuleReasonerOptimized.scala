@@ -59,7 +59,7 @@ abstract class ForwardRuleReasonerOptimized[V, G <: AbstractRDFGraph[V, G]]
 
     layer._2.foreach{rdg =>
       logger.info("Processing dependency graph " + rdg.printNodes())
-      newGraph = newGraph.union(applyRules(rdg.rules().toSeq, newGraph))
+      newGraph = newGraph.union(applyRules(rdg.rules().toSeq, newGraph)).distinct()
     }
     newGraph
   }
