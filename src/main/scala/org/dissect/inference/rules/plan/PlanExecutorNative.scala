@@ -28,15 +28,25 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
   val emptyGraph = EmptyRDFGraphDataFrame.get(sqlContext)
 
   def execute(plan: Plan, graph: RDFGraphNative): RDFGraphNative = {
+    // generate logical execution plan
     val logicalPlan = plan.toLogicalPlan(sqlContext)
-
     println(logicalPlan.toString())
 
+    // execute the plan
     val result = executePlan(logicalPlan, graph.toRDD().asInstanceOf[RDD[Product]])
-
     println("RESULT:\n" + result.collect().mkString("\n"))
 
-    new RDFGraphNative(graph.toRDD())
+    // map to RDF triples
+    val newGraph = new RDFGraphNative(
+      result.map(t =>
+        RDFTriple(
+          t.productElement(0).asInstanceOf[String],
+          t.productElement(1).asInstanceOf[String],
+          t.productElement(2).asInstanceOf[String]))
+    )
+
+
+    newGraph
   }
 
   def executePlan[T >: Product, U <: Product](logicalPlan: LogicalPlan, triples: RDD[Product]): RDD[Product] = {

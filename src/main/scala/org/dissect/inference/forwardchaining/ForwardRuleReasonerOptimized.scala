@@ -83,8 +83,7 @@ abstract class ForwardRuleReasonerOptimized[V, G <: AbstractRDFGraph[V, G]]
       nextCount = newGraph.size()
     } while (nextCount != oldCount)
 
-    graph
-
+    newGraph
   }
 
   /**
