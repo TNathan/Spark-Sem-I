@@ -61,7 +61,9 @@ object SetOfRulesTest {
 
     val graph = new RDFGraphNative(triplesRDD)
 
-    val rules = RuleUtils.load("rdfs-simple.rules").filter(r => r.getName == "prp-trp")
+    val rulesNames = Set("rdfs7", "prp-trp")
+
+    val rules = RuleUtils.load("rdfs-simple.rules").filter(r => rulesNames.contains(r.getName))
 
 //    val reasoner1 = new ForwardRuleReasonerNaive(sc, rules.toSet)
 //
