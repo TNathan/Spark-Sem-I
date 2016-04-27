@@ -46,8 +46,9 @@ class RDFGraphDataFrame(triples: DataFrame) extends AbstractRDFGraph[DataFrame, 
     new RDFGraphDataFrame(triples.unionAll(graph.toDataFrame()))
   }
 
-  def cache() = {
+  def cache(): this.type = {
     triples.cache()
+    this
   }
 
   def distinct() = {

@@ -40,7 +40,7 @@ abstract class AbstractRDFGraph[T, G <: AbstractRDFGraph[T, G]](triples: T) {
   /**
     * Persist the triples RDD with the default storage level (`MEMORY_ONLY`).
     */
-  def cache()
+  def cache(): G
 
   /**
     * Returns a new graph that does not contain duplicate triples.

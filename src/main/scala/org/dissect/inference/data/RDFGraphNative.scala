@@ -46,8 +46,9 @@ class RDFGraphNative(val triples: RDD[RDFTriple]) extends AbstractRDFGraph[RDD[R
     new RDFGraphNative(triples.union(graph.toRDD()))
   }
 
-  def cache() = {
+  def cache(): this.type = {
     triples.cache()
+    this
   }
 
   def distinct() = {
