@@ -5,17 +5,15 @@ import java.util
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression}
+import org.apache.spark.sql.catalyst.expressions.{Alias, And, AttributeReference, EqualTo, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.plans.{Inner, logical}
 import org.dissect.inference.data._
-import org.dissect.inference.rules.RDDOperations
+import org.dissect.inference.utils.Tuple0
 import org.dissect.inference.utils.logging.Logging
-import org.dissect.inference.utils.{TripleUtils, Tuple0}
 
+import scala.collection.JavaConversions._
 import scala.collection.mutable
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-import collection.JavaConversions._
 
 /**
   * An executor that works on the the native Scala data structures and uses Spark joins, filters etc.
@@ -30,11 +28,11 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
   def execute(plan: Plan, graph: RDFGraphNative): RDFGraphNative = {
     // generate logical execution plan
     val logicalPlan = plan.toLogicalPlan(sqlContext)
-    println(logicalPlan.toString())
+    debug(logicalPlan.toString())
 
     // execute the plan
     val result = executePlan(logicalPlan, graph.toRDD().asInstanceOf[RDD[Product]])
-    println("RESULT:\n" + result.collect().mkString("\n"))
+    debug("RESULT:\n" + result.collect().mkString("\n"))
 
     // map to RDF triples
     val newGraph = new RDFGraphNative(
@@ -45,58 +43,113 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
           t.productElement(2).asInstanceOf[String]))
     )
 
-
+    // return new graph
     newGraph
+  }
+
+  def performJoin(leftRDD: RDD[Product], rightRDD: RDD[Product],
+                  leftExpressions: List[Expression], rightExpressions: List[Expression],
+                  joinCondition: Expression): RDD[Product] = {
+    trace("JOIN ON " + joinCondition)
+    trace("L:\n" + leftRDD.collect().mkString("\n"))
+    trace("R:\n" + rightRDD.collect().mkString("\n"))
+
+    trace("EXPR L:" + leftExpressions)
+    trace("EXPR R:" + rightExpressions)
+
+    // get expressions used in join conditions
+    val joinExpressions = expressionsFor(joinCondition, true)
+    trace("JOIN EXPR:" + joinExpressions)
+
+    // get left and right join expressions
+    val joinExpressionsLeft = joinExpressions.filter(expr => leftExpressions.contains(expr))
+    val joinExpressionsRight = joinExpressions.filter(expr => rightExpressions.contains(expr))
+    trace("JOIN EXPR L:" + joinExpressionsLeft)
+    trace("JOIN EXPR R:" + joinExpressionsRight)
+
+    // get positions of expressions
+    val joinPositionsLeft = joinExpressionsLeft.map(expr => leftExpressions.indexOf(expr))
+    val joinPositionsRight = joinExpressionsRight.map(expr => rightExpressions.indexOf(expr))
+    trace("JOIN POS L:" + joinPositionsLeft)
+    trace("JOIN POS R:" + joinPositionsRight)
+
+    // convert to PairRDDs
+    val l = toPairRDD(leftRDD, joinPositionsLeft)
+    val r = toPairRDD(rightRDD, joinPositionsRight)
+    trace("L PAIR:\n" + l.collect().mkString("\n"))
+    trace("R PAIR:\n" + r.collect().mkString("\n"))
+
+    // perform join
+    val joinedRDD = l.join(r)
+    trace("JOINED\n" + joinedRDD.collect().mkString("\n"))
+
+    // map it back to tuples
+    val result = mergedRDD(joinedRDD, joinPositionsLeft)
+    trace("MERGED\n" + result.collect().mkString("\n"))
+
+    result
+  }
+
+  def performProjection(rdd: RDD[Product], projectList: Seq[Expression],
+                        childExpressions: Seq[Expression], joinConditions: Seq[EqualTo]): RDD[Product] = {
+    trace("PROJECTION")
+    trace("PROJECTION VARS:" + projectList)
+    trace("CHILD EXPR:" + childExpressions)
+
+    var result = rdd
+
+    // in case of Join, we rewrite the projection list
+    var projectListNew = projectList.map(expr => {
+      if (joinConditions.filter(cond => cond.right.simpleString == expr.simpleString).nonEmpty) joinConditions.head
+      else expr
+    }
+    )
+
+
+    val availableExpressionsReal = childExpressions.distinct
+    trace("CHILD EXPR(REAL):" + availableExpressionsReal)
+
+    // get aliase
+    var aliases = mutable.ListBuffer[(Int, Expression)]()
+    aliases ++= projectList
+      .filter(expr => expr.isInstanceOf[Alias])
+      .map(expr => projectList.indexOf(expr) -> expr.asInstanceOf[Alias].child)
+
+    // if size of projection or ordering is different, or there is an alias var
+    if(projectList.size != childExpressions.size ||
+      !projectList.equals(childExpressions) ||
+      aliases.nonEmpty){
+
+      // get the positions for projection
+      val positions = projectList.map(expr => availableExpressionsReal.indexOf(expr.simpleString))
+      trace("EXTR POSITIONS:" + positions)
+
+      result = rdd map genMapper(tuple => extract(tuple, positions, aliases))
+    }
+    result
   }
 
   def executePlan[T >: Product, U <: Product](logicalPlan: LogicalPlan, triples: RDD[Product]): RDD[Product] = {
     logicalPlan match {
       case logical.Join(left, right, Inner, Some(condition)) =>
-        trace("JOIN")
+        // process left child
         val leftRDD = executePlan(left, triples)
+
+        // process right child
         val rightRDD = executePlan(right, triples)
-        trace("L:\n" + leftRDD.collect().mkString("\n"))
-        trace("R:\n" + rightRDD.collect().mkString("\n"))
-
-        val joinExpressions = expressionsFor(condition, true).map(e => e.simpleString)
-        trace("JOIN EXPR:" + joinExpressions)
-
-        val leftExpressions = expressionsFor(left).map(e => e.simpleString)
-        val rightExpressions = expressionsFor(right).map(e => e.simpleString)
-        trace("EXPR L:" + leftExpressions)
-        trace("EXPR R:" + rightExpressions)
-
-        val joinExpressionsLeft = joinExpressions.intersect(leftExpressions)
-        val joinExpressionsRight = joinExpressions.filter(expr => rightExpressions.contains(expr))
-        trace("JOIN EXPR L:" + joinExpressionsLeft)
-        trace("JOIN EXPR R:" + joinExpressionsRight)
-
-        val joinPositionsLeft = joinExpressionsLeft.map(expr => leftExpressions.indexOf(expr))
-        val joinPositionsRight = joinExpressionsRight.map(expr => rightExpressions.indexOf(expr))
-        trace("JOIN POS L:" + joinPositionsLeft)
-        trace("JOIN POS R:" + joinPositionsRight)
-
-        // convert to PairRDDs
-        val l = toPairRDD(leftRDD, joinPositionsLeft)
-        val r = toPairRDD(rightRDD, joinPositionsRight)
-        trace("L PAIR:\n" + l.collect().mkString("\n"))
-        trace("R PAIR:\n" + r.collect().mkString("\n"))
 
         // perform join
-        val joinedRDD = l.join(r)
-        trace("JOINED\n" + joinedRDD.collect().mkString("\n"))
-
-        // map it back to tuples
-        val merged = mergedRDD(joinedRDD, joinPositionsLeft)
-
-        trace("MERGED\n" + merged.collect().mkString("\n"))
-        merged
+        performJoin(leftRDD, rightRDD, expressionsFor(left), expressionsFor(right), condition)
       case logical.Project(projectList, child) =>
+        // process child
         var rdd = executePlan(child, triples)
+
         trace("PROJECT")
-        trace(projectList.map(expr => expr.asInstanceOf[AttributeReference].simpleString).mkString(","))
+        trace(projectList.map(expr => expr.simpleString).mkString(","))
 
         var projectionVars: Seq[Expression] = projectList
+
+        var joinConditions = Seq[EqualTo]()
 
         // get the available child expressions
         val childExpressions = (child match {
@@ -106,7 +159,7 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
             list ++= expressionsFor(left) ++ expressionsFor(right)
             val eCond = expressionsFor(condition, true).map(expr => expr.simpleString)
             val eRight = expressionsFor(right)
-            val joins = joinConditions(condition)
+            val joins = joinConditionsFor(condition)
             var list2 = new mutable.ListBuffer[Expression]()
             list.foreach{expr =>
               var replace: Option[Expression] = None
@@ -145,6 +198,8 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
             projectionVars = projectList2.toSeq
 
             list2.toList
+            joinConditions = joinConditionsFor(condition)
+            list
           }
           case _ => expressionsFor(child)
         })
@@ -154,40 +209,44 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
         trace("PROJECTION VARS:" + projectionVars)
 
         val availableExpressionsReal = childExpressions.distinct
-        trace("CHILD EXPR(REAL):" + projectionVars)
+        trace("CHILD EXPR(REAL):" + availableExpressionsReal)
 
-        if(projectionVars.size < childExpressions.size) {
-          val positions = projectionVars.map(expr => availableExpressionsReal.indexOf(expr.asInstanceOf[AttributeReference].simpleString))
+        var aliases = mutable.ListBuffer[(Int, Expression)]()
+        aliases ++= projectionVars
+          .filter(expr => expr.isInstanceOf[Alias])
+          .map(expr => projectionVars.indexOf(expr) -> expr.asInstanceOf[Alias].child)
+
+        // if size of projection or ordering is different, or there is an alias var
+        if(projectionVars.size != childExpressions.size ||
+          !projectionVars.equals(childExpressions) ||
+          aliases.nonEmpty){
+
+          val positions = projectionVars.map(expr => availableExpressionsReal.indexOf(expr.simpleString))
 
           trace("EXTR POSITIONS:" + positions)
 
-          rdd = rdd map genMapper(tuple => extract(tuple, positions))
-        } else if(projectionVars.size > childExpressions.size) {
-            val positions = projectionVars.map(expr => availableExpressionsReal.indexOf(expr.asInstanceOf[AttributeReference].simpleString))
-        } else {
-          val positions = projectionVars.map(expr => availableExpressionsReal.indexOf(expr.asInstanceOf[AttributeReference].simpleString))
-
-          trace("EXTR POSITIONS:" + positions)
-
-          rdd = rdd map genMapper(tuple => extract(tuple, positions))
+          rdd = rdd map genMapper(tuple => extract(tuple, positions, aliases))
         }
 
         rdd
       case logical.Filter(condition, child) =>
-        println("FILTER")
+        // process child
         val childRDD = executePlan(child, triples)
+
+        // apply the filter
+        trace("FILTER")
         val childExpressions = expressionsFor(child)
         applyFilter(condition, childExpressions, childRDD)
       case default =>
-        println(default.simpleString)
+        trace(default.simpleString)
         triples
     }
   }
 
-  def joinConditions(expr: Expression): List[EqualTo] = {
+  def joinConditionsFor(expr: Expression): List[EqualTo] = {
     expr match {
       case And(left: Expression, right: Expression) =>
-        joinConditions(left) ++ joinConditions(right)
+        joinConditionsFor(left) ++ joinConditionsFor(right)
       case EqualTo(left: Expression, right: Expression) =>
         List(EqualTo(left: Expression, right: Expression))
       case _ =>
@@ -195,10 +254,10 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
     }
   }
 
-  def extract[T <: Product](tuple: T, positions: Seq[Int]): Product = {
+  def extract[T <: Product](tuple: T, positions: Seq[Int], aliases: mutable.ListBuffer[(Int, Expression)]): Product = {
     val list = tuple.productIterator.toList
-    val newList = positions.map(pos => list(pos)).toTuple
-    newList
+    val newList = positions.map(pos => if(pos == -1) aliases.remove(0)._2.toString() else list(pos))
+    newList.toTuple
   }
 
   def genMapper[A, B](f: A => B): A => B = {
@@ -243,40 +302,6 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
     tuples map genMapper(t => mergeKeyValue(t, joinPositions))
   }
 
-  def executePlan2[T <: Product](logicalPlan: LogicalPlan, triples: RDD[T]): RDD[T] = {
-    logicalPlan match {
-      case logical.Join(left, right, Inner, Some(condition)) =>
-        println("JOIN")
-        val leftRDD = executePlan2(left, triples)
-        val rightRDD = executePlan2(right, triples)
-        leftRDD
-      case logical.Project(projectList, child) =>
-        println("PROJECT")
-        println(projectList.map(expr => expr.qualifiedName).mkString("--"))
-        val childExpressions = expressionsFor(child)
-
-        var rdd = executePlan2(child, triples)
-
-        if(projectList.size < childExpressions.size) {
-          val positions = projectList.map(expr => childExpressions.indexOf(expr))
-
-          val r = executePlan2(child, triples) map genMapper(tuple => extract(tuple, positions))
-          println(r)
-
-        }
-
-        rdd
-      case logical.Filter(condition, child) =>
-        println("FILTER")
-        val childRDD = executePlan2(child, triples)
-        val childExpressions = expressionsFor(child)
-        applyFilter(condition, childExpressions, childRDD)
-      case default =>
-        println(default.getClass)
-        triples
-    }
-  }
-
   def applyFilter[T <: Product](condition: Expression, childExpressions: List[Expression], rdd: RDD[T]): RDD[T] = {
     condition match {
       case And(left: Expression, right: Expression) =>
@@ -287,31 +312,6 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
         val index = childExpressions.map(e => e.toString()).indexOf(left.toString())
 
         rdd.filter(t => t.productElement(index) == value)
-      case _ => rdd
-    }
-  }
-
-  def applyFilter2(condition: Expression, childExpressions: List[Expression], rdd: RDD[_]): RDD[_] = {
-    condition match {
-      case And(left: Expression, right: Expression) =>
-        applyFilter2(right, childExpressions, applyFilter2(left, childExpressions, rdd))
-      case EqualTo(left: Expression, right: Expression) =>
-        val col = left.asInstanceOf[AttributeReference].name
-        val value = right.toString()
-
-        if(childExpressions.size == 3) {
-          var tmp = rdd.asInstanceOf[RDD[RDFTriple]]
-          tmp = if(col == "subject") {
-            tmp.filter{t => t.subject == value}
-          } else if(col == "predicate") {
-            tmp.filter{t => t.predicate == value}
-          } else {
-            tmp.filter{t => t.`object` == value}
-          }
-          tmp
-        } else {
-          rdd
-        }
       case _ => rdd
     }
   }
@@ -340,97 +340,6 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
     }
   }
 
-  case class Result[T <: Any](expressions: Seq[Expression], rdd: RDD[_]) {
-
-  }
-
-  def execute2(plan: Plan, graph: RDFGraphNative): RDFGraphNative = {
-    println("JOIN CANDIDATES:\n" + plan.joins.mkString("\n"))
-
-    // for each triple pattern compute the relation first
-    val relations = new mutable.HashMap[org.apache.jena.graph.Triple, RDD[RDFTriple]]()
-
-    plan.triplePatterns.foreach{tp =>
-      //        println(tp)
-      val rel = graph.find(tp)
-      println("REL\n" + rel.collect().mkString("\n"))
-      relations += (tp -> rel)
-    }
-
-    // TODO order joins by dependencies
-    val joins = plan.joins
-
-    // we merge joins with the same triple patterns
-    val mergedJoins = mergeJoins(joins)
-
-    mergedJoins.foreach{entry =>
-
-      val tp1 = entry._1._1
-      val tp2 = entry._1._2
-
-      val joinVars = entry._2.map(join => join.joinVar)
-
-      println("JOIN: " + tp1 + " JOIN " + tp2 + " ON " + joinVars)
-
-      val rel1 = relations(tp1)
-      val rel2 = relations(tp2)
-
-      val res =
-        if (joinVars.size == 1) {
-          // convert RDD of relation 1 by position of join variables
-          val tmp1 =
-            TripleUtils.position(joinVars.head, tp1) match {
-              case 1 => RDDOperations.subjKeyPredObj(rel1)
-              case 2 => RDDOperations.predKeySubjObj(rel1)
-              case 3 => RDDOperations.objKeySubjPred(rel1)
-            }
-          println("TMP1\n" + tmp1.collect().mkString("\n"))
-
-          // convert RDD of relation 2 by position of join variables
-          val tmp2 =
-            TripleUtils.position(joinVars.head, tp2) match {
-              case 1 => RDDOperations.subjKeyPredObj(rel2)
-              case 2 => RDDOperations.predKeySubjObj(rel2)
-              case 3 => RDDOperations.objKeySubjPred(rel2)
-            }
-          println("TMP2\n" + tmp2.collect().mkString("\n"))
-
-          // perform join
-          tmp1.join(tmp2)
-        } else {
-          // convert RDD of relation 1 by position of join variables
-          val positions1 = Seq(joinVars.map(v => TripleUtils.position(v, tp1)).toList).map(tup => tup(0) -> tup(1)).head
-          val tmp1 =
-            positions1 match {
-              case (1, 2) => RDDOperations.subjPredKeyObj(rel2)
-              case (1, 3) => RDDOperations.subjObjKeyPred(rel2)
-              case (2, 3) => RDDOperations.objPredKeySubj(rel2)
-            }
-          println("TMP1\n" + tmp1.collect().mkString("\n"))
-
-          // convert RDD of relation 2 by position of join variables
-          val positions2 = Seq(joinVars.map(v => TripleUtils.position(v, tp2)).toList).map(tup => tup(0) -> tup(1)).head
-          val tmp2 =
-            positions2 match {
-              case (1, 2) => RDDOperations.subjPredKeyObj(rel2)
-              case (1, 3) => RDDOperations.subjObjKeyPred(rel2)
-              case (2, 3) => RDDOperations.objPredKeySubj(rel2)
-            }
-          println("TMP2\n" + tmp2.collect().mkString("\n"))
-
-          // perform join
-          tmp1.join(tmp2)
-        }
-      println("RES\n" + res.collect().mkString("\n"))
-    }
-
-    graph
-  }
-
-  def mergeJoins(joins: mutable.Set[Join]) = {
-    joins.groupBy(join => (join.tp1, join.tp2))
-  }
-
   implicit class EnrichedWithToTuple[A](elements: Seq[A]) {
     def toTuple: Product = elements.length match {
       case 0 => Tuple0
@@ -457,13 +366,4 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
     def toTuple10 = elements match {case Seq(a, b, c, d, e, f, g, h, i, j) => (a, b, c, d, e, f, g, h, i, j) }
 
   }
-
-  abstract class AbstractSolutionMapping[K, V]() {
-    val var2Value = mutable.HashMap[K, V]()
-
-    def addMapping(variable: K, value: V) = var2Value += variable -> value
-  }
-
-  class SolutionMapping extends AbstractSolutionMapping[String, String]
-
 }

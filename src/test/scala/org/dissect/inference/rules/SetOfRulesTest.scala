@@ -30,9 +30,12 @@ object SetOfRulesTest {
     val p1 = ns + "p1"
     val p2 = ns + "p2"
     val p3 = ns + "p3"
+    val c1 = ns + "C1"
+    val c2 = ns + "C2"
     triples += RDFTriple(p1, RDF.`type`.getURI, OWL2.TransitiveProperty.getURI)
     triples += RDFTriple(p2, RDF.`type`.getURI, OWL2.TransitiveProperty.getURI)
     triples += RDFTriple(p1, RDFS.subPropertyOf.getURI, p2)
+    triples += RDFTriple(c1, RDFS.subClassOf.getURI, c2)
 
     val scale = 1
 
@@ -57,11 +60,22 @@ object SetOfRulesTest {
       triples += RDFTriple(ns + "y" + i, p3, ns + "z" + i)
     }
 
+    // C1(c_i)
+    begin = 1
+    end = 10 * scale
+    for(i <- begin to end) {
+      triples += RDFTriple(ns + "c" + i, RDF.`type`.getURI, c1)
+    }
+
     val triplesRDD = sc.parallelize(triples.toSeq, 2)
 
     val graph = new RDFGraphNative(triplesRDD)
 
-    val rulesNames = Set("rdfs7", "prp-trp")
+    val rulesNames = Set(
+//      "rdfs7",
+//      "prp-trp",
+      "rdfs9"
+    )
 
     val rules = RuleUtils.load("rdfs-simple.rules").filter(r => rulesNames.contains(r.getName))
 
