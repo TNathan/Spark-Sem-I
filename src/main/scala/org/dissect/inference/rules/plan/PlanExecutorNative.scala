@@ -32,7 +32,7 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
 
     // execute the plan
     val result = executePlan(logicalPlan, graph.toRDD().asInstanceOf[RDD[Product]])
-    debug("RESULT:\n" + result.collect().mkString("\n"))
+    trace("RESULT:\n" + result.collect().mkString("\n"))
 
     // map to RDF triples
     val newGraph = new RDFGraphNative(
@@ -50,7 +50,7 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
   def performJoin(leftRDD: RDD[Product], rightRDD: RDD[Product],
                   leftExpressions: List[Expression], rightExpressions: List[Expression],
                   joinCondition: Expression): RDD[Product] = {
-    trace("JOIN ON " + joinCondition)
+    debug("JOIN ON " + joinCondition)
     trace("L:\n" + leftRDD.collect().mkString("\n"))
     trace("R:\n" + rightRDD.collect().mkString("\n"))
 
@@ -92,7 +92,7 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
 
   def performProjection(rdd: RDD[Product], projectList: Seq[Expression],
                         childExpressions: Seq[Expression], joinConditions: Seq[EqualTo]): RDD[Product] = {
-    trace("PROJECTION")
+    debug("PROJECTION")
     trace("PROJECTION VARS:" + projectList)
     trace("CHILD EXPR:" + childExpressions)
 
@@ -110,7 +110,7 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
     trace("CHILD EXPR(REAL):" + availableExpressionsReal)
 
     // get aliase
-    var aliases = mutable.ListBuffer[(Int, Expression)]()
+    var aliases = mutable.Seq[(Int, Expression)]()
     aliases ++= projectList
       .filter(expr => expr.isInstanceOf[Alias])
       .map(expr => projectList.indexOf(expr) -> expr.asInstanceOf[Alias].child)
@@ -144,7 +144,7 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
         // process child
         var rdd = executePlan(child, triples)
 
-        trace("PROJECT")
+        debug("PROJECTION")
         trace(projectList.map(expr => expr.simpleString).mkString(","))
 
         var projectionVars: Seq[Expression] = projectList
@@ -211,7 +211,7 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
         val availableExpressionsReal = childExpressions.distinct
         trace("CHILD EXPR(REAL):" + availableExpressionsReal)
 
-        var aliases = mutable.ListBuffer[(Int, Expression)]()
+        var aliases = mutable.Seq[(Int, Expression)]()
         aliases ++= projectionVars
           .filter(expr => expr.isInstanceOf[Alias])
           .map(expr => projectionVars.indexOf(expr) -> expr.asInstanceOf[Alias].child)
@@ -234,7 +234,6 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
         val childRDD = executePlan(child, triples)
 
         // apply the filter
-        trace("FILTER")
         val childExpressions = expressionsFor(child)
         applyFilter(condition, childExpressions, childRDD)
       case default =>
@@ -254,9 +253,11 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
     }
   }
 
-  def extract[T <: Product](tuple: T, positions: Seq[Int], aliases: mutable.ListBuffer[(Int, Expression)]): Product = {
+  def extract[T <: Product](tuple: T, positions: Seq[Int], aliases: mutable.Seq[(Int, Expression)]): Product = {
     val list = tuple.productIterator.toList
-    val newList = positions.map(pos => if(pos == -1) aliases.remove(0)._2.toString() else list(pos))
+    val mutList = mutable.ListBuffer[(Int, Expression)]()
+    mutList ++= aliases
+    val newList = positions.map(pos => if(pos == -1) mutList.remove(0)._2.toString() else list(pos))
     newList.toTuple
   }
 
@@ -303,6 +304,7 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
   }
 
   def applyFilter[T <: Product](condition: Expression, childExpressions: List[Expression], rdd: RDD[T]): RDD[T] = {
+    debug("FILTER")
     condition match {
       case And(left: Expression, right: Expression) =>
         applyFilter(right, childExpressions, applyFilter(left, childExpressions, rdd))

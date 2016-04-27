@@ -20,7 +20,7 @@ object SetOfRulesTest {
     // the SPARK config
     val conf = new SparkConf().setAppName("SPARK Reasoning")
     conf.set("spark.hadoop.validateOutputSpecs", "false")
-    conf.setMaster("local[2]")
+    conf.setMaster("local[4]")
     conf.set("spark.eventLog.enabled", "true")
     val sc = new SparkContext(conf)
 
@@ -67,17 +67,17 @@ object SetOfRulesTest {
       triples += RDFTriple(ns + "c" + i, RDF.`type`.getURI, c1)
     }
 
-    val triplesRDD = sc.parallelize(triples.toSeq, 2)
+    val triplesRDD = sc.parallelize(triples.toSeq, 4)
 
     val graph = new RDFGraphNative(triplesRDD)
 
     val rulesNames = Set(
-//      "rdfs7",
-//      "prp-trp",
+      "rdfs7",
+      "prp-trp",
       "rdfs9"
     )
 
-    val rules = RuleUtils.load("rdfs-simple.rules").filter(r => rulesNames.contains(r.getName))
+    val rules = RuleUtils.load("rdfs-simple.rules")//.filter(r => rulesNames.contains(r.getName))
 
 //    val reasoner1 = new ForwardRuleReasonerNaive(sc, rules.toSet)
 //

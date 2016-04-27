@@ -27,7 +27,7 @@ abstract class ForwardRuleReasonerOptimized[V, G <: AbstractRDFGraph[V, G]]
     */
   def apply(graph: G): G = {
 
-    var newGraph = graph
+    var newGraph = graph.cache()
 
     // generate the rule dependency graph
     val dependencyGraph = RuleDependencyGraphGenerator.generate(rules)
@@ -41,11 +41,11 @@ abstract class ForwardRuleReasonerOptimized[V, G <: AbstractRDFGraph[V, G]]
     // each layer contains a set of rule dependency graphs
     // for each layer we process those
     layers foreach { layer =>
-      newGraph = newGraph.union(processLayer(layer, newGraph)).distinct()
+      newGraph = newGraph.union(processLayer(layer, newGraph)).distinct().cache()
     }
 
     // de-duplicate
-    newGraph = newGraph.distinct()
+//    newGraph = newGraph.distinct()
 
     // return new graph
     newGraph
@@ -59,7 +59,7 @@ abstract class ForwardRuleReasonerOptimized[V, G <: AbstractRDFGraph[V, G]]
 
     layer._2.foreach{rdg =>
       logger.info("Processing dependency graph " + rdg.printNodes())
-      newGraph = newGraph.union(applyRules(rdg.rules().toSeq, newGraph)).distinct()
+      newGraph = newGraph.union(applyRules(rdg.rules().toSeq, newGraph)).distinct().cache()
     }
     newGraph
   }
@@ -71,14 +71,16 @@ abstract class ForwardRuleReasonerOptimized[V, G <: AbstractRDFGraph[V, G]]
     * @param graph the graph
     */
   def applyRules(rules: Seq[Rule], graph: G): G = {
-    var newGraph = graph
-
+    var newGraph = graph.cache()
+    var iteration = 1
     var oldCount = 0L
     var nextCount = newGraph.size
     do {
+      println("Iteration " + iteration)
+      iteration += 1
       oldCount = nextCount
 
-      newGraph = newGraph.union(applyRulesOnce(rules, graph)).distinct()
+      newGraph = newGraph.union(applyRulesOnce(rules, newGraph)).distinct().cache()
 
       nextCount = newGraph.size()
     } while (nextCount != oldCount)
@@ -107,7 +109,7 @@ abstract class ForwardRuleReasonerOptimized[V, G <: AbstractRDFGraph[V, G]]
     * @param graph the graph
     */
   def applyRule(rule: Rule, graph: G): G = {
-    logger.debug("Rule:" + rule)
+    logger.debug("Applying rule:" + rule)
     ruleExecutor.execute(rule, graph)
   }
 }
