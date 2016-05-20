@@ -305,6 +305,8 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
 
   def applyFilter[T <: Product](condition: Expression, childExpressions: List[Expression], rdd: RDD[T]): RDD[T] = {
     debug("FILTER")
+    debug(condition.simpleString)
+    debug(childExpressions.mkString)
     condition match {
       case And(left: Expression, right: Expression) =>
         applyFilter(right, childExpressions, applyFilter(left, childExpressions, rdd))

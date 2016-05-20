@@ -1,14 +1,16 @@
 package org.dissect.inference.rules.plan
 
+import java.lang.reflect.Method
+
 import org.apache.jena.graph.{Node, Triple}
 import org.apache.jena.reasoner.TriplePattern
 import org.apache.spark.sql.SQLContext
-import org.apache.spark.sql.catalyst.SqlParser
-import org.apache.spark.sql.catalyst.optimizer.DefaultOptimizer
+import org.apache.spark.sql.catalyst.analysis.Analyzer
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.execution.{QueryExecution, SparkSQLParser}
-import org.apache.spark.sql.execution.datasources.DDLParser
-import org.dissect.inference.utils.{RuleUtils, TripleUtils}
+import org.apache.spark.sql.execution.datasources.{DataSourceAnalysis, FindDataSourceTable, PreInsertCastAndRename, ResolveDataSource}
+import org.apache.spark.sql.execution.{QueryExecution, SparkSqlParser, datasources}
+import org.apache.spark.sql.internal.SQLConf
+import org.dissect.inference.utils.TripleUtils
 
 import scala.collection.mutable
 
@@ -19,11 +21,9 @@ import scala.collection.mutable
   */
 case class Plan(triplePatterns: Set[Triple], target: Triple, joins: mutable.Set[Join]) {
 
-  val sqlParser = new SparkSQLParser(SqlParser.parse(_))
-  val ddlParser = new DDLParser(sqlParser.parse(_))
-
   val aliases = new mutable.HashMap[Triple, String]()
   var idx = 0
+
 
   def generateJoins() = {
 
@@ -36,17 +36,32 @@ case class Plan(triplePatterns: Set[Triple], target: Triple, joins: mutable.Set[
   def toLogicalPlan(sqlContext: SQLContext): LogicalPlan = {
     // convert to SQL query
     val sql = toSQL
+    println("SQL query:" + sql)
 
     // generate logical plan
-    var logicalPlan = ddlParser.parse(sql, false)
+    val m = sqlContext.getClass().getDeclaredMethod("parseSql", classOf[String])
+    m.setAccessible(true)
+    var logicalPlan: LogicalPlan = m.invoke(sqlContext, sql).asInstanceOf[LogicalPlan]
+
+    val session = sqlContext.sparkSession
+    val m2 = session.getClass().getDeclaredMethod("sessionState")
+    m2.setAccessible(true)
+    val sessionState = m2.invoke(session)
+
+    val m3 = sessionState.getClass().getDeclaredMethod("analyzer")
+    m3.setAccessible(true)
+    val analyzer = m3.invoke(sessionState).asInstanceOf[Analyzer]
+
+    logicalPlan = analyzer.execute(logicalPlan)
+
 //    println(logicalPlan.toString())
 
     // optimize plan
-    logicalPlan = DefaultOptimizer.execute(logicalPlan)
+//    logicalPlan = DefaultOptimizer.execute(logicalPlan)
 //    println(logicalPlan.toString())
 
-    val qe = new QueryExecution(sqlContext, logicalPlan)
-    val optimizedPlan = DefaultOptimizer.execute(qe.optimizedPlan)
+//    val qe = new QueryExecution(sqlContext, logicalPlan)
+    val optimizedPlan = logicalPlan//DefaultOptimizer.execute(qe.optimizedPlan)
 
     optimizedPlan
   }
@@ -97,7 +112,9 @@ case class Plan(triplePatterns: Set[Triple], target: Triple, joins: mutable.Set[
   }
 
   def fromPart(): String = {
-    " FROM " + triplePatterns.map(tp => fromPart(tp)).mkString(", ")
+    var sql = " FROM " + triplePatterns.map(tp => fromPart(tp)).mkString(" INNER JOIN ")
+    sql += " ON " + joins.map(join => joinExpressionFor(join)).mkString(" AND ")
+    sql
   }
 
   def wherePart(): String = {
@@ -105,7 +122,7 @@ case class Plan(triplePatterns: Set[Triple], target: Triple, joins: mutable.Set[
     val expressions = mutable.ArrayBuffer[String]()
 
     expressions ++= triplePatterns.flatMap(tp => whereParts(tp))
-    expressions ++= joins.map(join => joinExpressionFor(join))
+//    expressions ++= joins.map(join => joinExpressionFor(join))
 
     sql += expressions.mkString(" AND ")
 

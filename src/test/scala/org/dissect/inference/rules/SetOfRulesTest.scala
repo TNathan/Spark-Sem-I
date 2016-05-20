@@ -3,7 +3,7 @@ package org.dissect.inference.rules
 import org.apache.jena.vocabulary.{OWL2, RDF, RDFS}
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkConf, SparkContext}
-import org.dissect.inference.data.{RDFGraph, RDFGraphNative, RDFGraphWriter, RDFTriple}
+import org.dissect.inference.data._
 import org.dissect.inference.forwardchaining.{ForwardRuleReasonerNaive, ForwardRuleReasonerOptimized, ForwardRuleReasonerOptimizedNative, ForwardRuleReasonerOptimizedSQL}
 import org.dissect.inference.utils.RuleUtils
 
@@ -86,18 +86,16 @@ object SetOfRulesTest {
 //    RDFGraphWriter.writeToFile(res1, "/tmp/spark-tests/naive")
 
     val reasoner2 = new ForwardRuleReasonerOptimizedNative(sc, rules.toSet)
-
     val res2 = reasoner2.apply(graph)
-
     RDFGraphWriter.writeToFile(res2.toRDD(), "/tmp/spark-tests/optimized-native")
 
-//    val sqlContext = new SQLContext(sc)
-//    val df = graph.toDataFrame(sqlContext).cache()
-//    val reasoner3 = new ForwardRuleReasonerOptimizedSQL(sqlContext, rules.toSet)
-//sqlContext.cacheTable("TRIPLES")
-//    val res3 = reasoner3.apply(df)
-//
-//    RDFGraphWriter.writeToFile(res3, "/tmp/spark-tests/optimized-sql")
+    val sqlContext = new SQLContext(sc)
+    val graphDataframe = new RDFGraphDataFrame(graph.toDataFrame(sqlContext).cache())
+    val reasoner3 = new ForwardRuleReasonerOptimizedSQL(sqlContext, rules.toSet)
+    sqlContext.cacheTable("TRIPLES")
+    val res3 = reasoner3.apply(graphDataframe)
+
+    RDFGraphWriter.writeToFile(res3.toDataFrame(), "/tmp/spark-tests/optimized-sql")
 
     sc.stop()
   }

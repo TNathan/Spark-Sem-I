@@ -15,7 +15,8 @@ object PlanTest {
 //    Planner.rewrite(rule)
 
     rule = RuleUtils.byName(rules, "prp-trp").get
-    Planner.generatePlan(rule)
+    val plan = Planner.generatePlan(rule)
+    println(plan)
   }
 
 }

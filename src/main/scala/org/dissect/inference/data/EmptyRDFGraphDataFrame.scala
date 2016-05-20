@@ -22,7 +22,7 @@ object EmptyRDFGraphDataFrame {
     val triplesDataFrame = sqlContext.createDataFrame(rowRDD, schema)
 
     // register the DataFrame as a table
-    triplesDataFrame.registerTempTable("TRIPLES")
+    triplesDataFrame.createOrReplaceTempView("TRIPLES")
 
     triplesDataFrame
   }
