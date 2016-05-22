@@ -6,7 +6,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, AttributeReference, EqualTo, Expression}
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.catalyst.plans.{Inner, logical}
 import org.dissect.inference.data._
 import org.dissect.inference.utils.Tuple0
@@ -328,6 +328,8 @@ class PlanExecutorNative(sc: SparkContext) extends PlanExecutor[RDD[RDFTriple], 
         projectList.toList
       case logical.Filter(condition, child) =>
         expressionsFor(condition)
+      case SubqueryAlias(alias: String, child: LogicalPlan) =>
+        expressionsFor(child)
       case _ =>
         logicalPlan.expressions.toList
     }
