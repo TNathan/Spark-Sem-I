@@ -69,11 +69,11 @@ case class Plan(triplePatterns: Set[Triple], target: Triple, joins: mutable.Set[
   def toSQL = {
     var sql = "SELECT "
 
-    sql += projectionPart()
+    sql += projectionPart() + "\n"
 
-    sql += fromPart()
+    sql += fromPart() + "\n"
 
-    sql += wherePart()
+    sql += wherePart() + "\n"
 
     sql
   }

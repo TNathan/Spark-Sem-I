@@ -1,6 +1,6 @@
 package org.dissect.inference.rules
 
-import org.apache.spark.sql.{DataFrame, SQLContext}
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.dissect.inference.data.RDFGraphDataFrame
 import org.dissect.inference.rules.plan.PlanExecutorSQL
 
@@ -9,6 +9,6 @@ import org.dissect.inference.rules.plan.PlanExecutorSQL
   *
   * @author Lorenz Buehmann
   */
-class RuleExecutorSQL(sqlContext: SQLContext) extends RuleExecutor[DataFrame, RDFGraphDataFrame](new PlanExecutorSQL(sqlContext)){
+class RuleExecutorSQL(sparkSession: SparkSession) extends RuleExecutor[DataFrame, RDFGraphDataFrame](new PlanExecutorSQL(sparkSession)){
 
 }

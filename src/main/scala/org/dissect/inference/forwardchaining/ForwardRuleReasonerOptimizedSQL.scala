@@ -3,7 +3,7 @@ package org.dissect.inference.forwardchaining
 import org.apache.jena.reasoner.rulesys.Rule
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, SQLContext}
+import org.apache.spark.sql.{DataFrame, SQLContext, SparkSession}
 import org.dissect.inference.data.{RDFGraph, RDFGraphDataFrame, RDFGraphNative, RDFTriple}
 import org.dissect.inference.rules.{RuleDependencyGraphAnalyzer, RuleDependencyGraphGenerator, RuleExecutorNative, RuleExecutorSQL}
 import org.slf4j.LoggerFactory
@@ -17,6 +17,6 @@ import scalax.collection.GraphEdge.DiEdge
   *
   * @author Lorenz Buehmann
   */
-class ForwardRuleReasonerOptimizedSQL(sqlContext: SQLContext, rules: Set[Rule])
-  extends ForwardRuleReasonerOptimized[DataFrame, RDFGraphDataFrame](rules, new RuleExecutorSQL(sqlContext)){
+class ForwardRuleReasonerOptimizedSQL(sparkSession: SparkSession, rules: Set[Rule])
+  extends ForwardRuleReasonerOptimized[DataFrame, RDFGraphDataFrame](rules, new RuleExecutorSQL(sparkSession)){
 }

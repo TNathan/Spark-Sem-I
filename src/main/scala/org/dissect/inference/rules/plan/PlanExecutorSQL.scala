@@ -1,6 +1,6 @@
 package org.dissect.inference.rules.plan
 
-import org.apache.spark.sql.{DataFrame, SQLContext}
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.dissect.inference.data.RDFGraphDataFrame
 import org.slf4j.LoggerFactory
 
@@ -9,17 +9,17 @@ import org.slf4j.LoggerFactory
   *
   * @author Lorenz Buehmann
   */
-class PlanExecutorSQL(sqlContext: SQLContext) extends PlanExecutor[DataFrame, RDFGraphDataFrame]{
+class PlanExecutorSQL(sparkSession: SparkSession) extends PlanExecutor[DataFrame, RDFGraphDataFrame]{
   override val logger = com.typesafe.scalalogging.slf4j.Logger(LoggerFactory.getLogger(this.getClass.getName))
 
   def execute(plan: Plan, graph: RDFGraphDataFrame): RDFGraphDataFrame = {
 
     // generate SQL query
     val sql = plan.toSQL
-    logger.info("SQL:" + sql)
+    logger.info("SQL Query:" + sql)
 
     // execute the query
-    val results = graph.toDataFrame().sqlContext.sql(sql)
+    val results = sparkSession.sql(sql)
 //    println(results.explain(true))
 
     new RDFGraphDataFrame(results)
