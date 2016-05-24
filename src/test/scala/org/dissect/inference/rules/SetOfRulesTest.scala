@@ -1,10 +1,11 @@
 package org.dissect.inference.rules
 
+import org.apache.jena.reasoner.rulesys.Rule
 import org.apache.jena.vocabulary.{OWL2, RDF, RDFS}
-import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.dissect.inference.data._
-import org.dissect.inference.forwardchaining.{ForwardRuleReasonerNaive, ForwardRuleReasonerOptimized, ForwardRuleReasonerOptimizedNative, ForwardRuleReasonerOptimizedSQL}
+import org.dissect.inference.forwardchaining.{ForwardRuleReasonerNaive, ForwardRuleReasonerOptimizedNative, ForwardRuleReasonerOptimizedSQL}
 import org.dissect.inference.utils.RuleUtils
 
 import scala.collection.mutable
@@ -16,15 +17,47 @@ import scala.collection.mutable
   */
 object SetOfRulesTest {
 
-  def main(args: Array[String]) {
-    // the SPARK config
-    val conf = new SparkConf().setAppName("SPARK Reasoning")
-    conf.set("spark.hadoop.validateOutputSpecs", "false")
-    conf.setMaster("local[4]")
-    conf.set("spark.eventLog.enabled", "true")
-    val sc = new SparkContext(conf)
+  val sparkSession = SparkSession.builder
+    .master("local[4]")
+    .appName("SPARK Reasoning")
+    .config("spark.eventLog.enabled", "true")
+    .getOrCreate()
 
+  val sc = sparkSession.sparkContext
+
+  def main(args: Array[String]) {
     // generate graph
+    val scale = 100000
+    val triples = generateData(scale)
+
+    // make RDD
+    println("distributing...")
+    val triplesRDD = sc.parallelize(triples.toSeq, 4)
+    triplesRDD.toDebugString
+
+    // create graph
+    val graph = new RDFGraphNative(triplesRDD)
+
+    val ruleNames = Set(
+      "rdfs7",
+      "prp-trp",
+      "rdfs9"
+    )
+
+    val numberOfTriples = graph.size()
+    println("#Triples:" + numberOfTriples)
+
+    val rules = RuleUtils.load("rdfs-simple.rules")//.filter(r => ruleNames.contains(r.getName))
+
+//    runNaive(graph, rules)
+//    runNative(graph, rules)
+    runSQL(graph, rules)
+
+    sc.stop()
+  }
+
+  def generateData(scale: Integer) = {
+    println("generating data...")
     val triples = new mutable.HashSet[RDFTriple]()
     val ns = "http://ex.org/"
     val p1 = ns + "p1"
@@ -37,25 +70,25 @@ object SetOfRulesTest {
     triples += RDFTriple(p1, RDFS.subPropertyOf.getURI, p2)
     triples += RDFTriple(c1, RDFS.subClassOf.getURI, c2)
 
-    val scale = 1
-
     var begin = 1
     var end = 10 * scale
-    for(i <- begin to end) {
+    for (i <- begin to end) {
       triples += RDFTriple(ns + "x" + i, p1, ns + "y" + i)
       triples += RDFTriple(ns + "y" + i, p1, ns + "z" + i)
     }
 
     begin = end + 1
     end = begin + 10 * scale
-    for(i <- begin to end) { // should not produce (?x_i, p1, ?z_i) as p1 and p2 are used
+    for (i <- begin to end) {
+      // should not produce (?x_i, p1, ?z_i) as p1 and p2 are used
       triples += RDFTriple(ns + "x" + i, p1, ns + "y" + i)
       triples += RDFTriple(ns + "y" + i, p2, ns + "z" + i)
     }
 
     begin = end + 1
     end = begin + 10 * scale
-    for(i <- begin to end) { // should not produce (?x_i, p3, ?z_i) as p3 is not transitive
+    for (i <- begin to end) {
+      // should not produce (?x_i, p3, ?z_i) as p3 is not transitive
       triples += RDFTriple(ns + "x" + i, p3, ns + "y" + i)
       triples += RDFTriple(ns + "y" + i, p3, ns + "z" + i)
     }
@@ -63,40 +96,32 @@ object SetOfRulesTest {
     // C1(c_i)
     begin = 1
     end = 10 * scale
-    for(i <- begin to end) {
+    for (i <- begin to end) {
       triples += RDFTriple(ns + "c" + i, RDF.`type`.getURI, c1)
     }
 
-    val triplesRDD = sc.parallelize(triples.toSeq, 4)
+    triples
+  }
 
-    val graph = new RDFGraphNative(triplesRDD)
+  def runNaive(graph: RDFGraphNative, rules: Seq[Rule]) = {
+    val reasoner = new ForwardRuleReasonerNaive(sc, rules.toSet)
+    val res = reasoner.apply(graph)
+    RDFGraphWriter.writeToFile(res.toRDD(), "/tmp/spark-tests/naive")
+  }
 
-    val rulesNames = Set(
-      "rdfs7",
-      "prp-trp",
-      "rdfs9"
-    )
+  def runNative(graph: RDFGraphNative, rules: Seq[Rule]) = {
+    val reasoner = new ForwardRuleReasonerOptimizedNative(sc, rules.toSet)
+    val res = reasoner.apply(graph)
+    RDFGraphWriter.writeToFile(res.toRDD(), "/tmp/spark-tests/optimized-native")
+  }
 
-    val rules = RuleUtils.load("rdfs-simple.rules")//.filter(r => rulesNames.contains(r.getName))
+  def runSQL(graph: RDFGraphNative, rules: Seq[Rule]) = {
+    // create Dataframe based graph
+    val graphDataframe = new RDFGraphDataFrame(graph.toDataFrame(sparkSession)).cache()
 
-//    val reasoner1 = new ForwardRuleReasonerNaive(sc, rules.toSet)
-//
-//    val res1 = reasoner1.apply(graph)
-//
-//    RDFGraphWriter.writeToFile(res1, "/tmp/spark-tests/naive")
-
-    val reasoner2 = new ForwardRuleReasonerOptimizedNative(sc, rules.toSet)
-    val res2 = reasoner2.apply(graph)
-    RDFGraphWriter.writeToFile(res2.toRDD(), "/tmp/spark-tests/optimized-native")
-
-    val sqlContext = new SQLContext(sc)
-    val graphDataframe = new RDFGraphDataFrame(graph.toDataFrame(sqlContext).cache())
-    val reasoner3 = new ForwardRuleReasonerOptimizedSQL(sqlContext, rules.toSet)
-    sqlContext.cacheTable("TRIPLES")
-    val res3 = reasoner3.apply(graphDataframe)
-
-    RDFGraphWriter.writeToFile(res3.toDataFrame(), "/tmp/spark-tests/optimized-sql")
-
-    sc.stop()
+    val reasoner = new ForwardRuleReasonerOptimizedSQL(sparkSession, rules.toSet)
+    val res = reasoner.apply(graphDataframe)
+    RDFGraphWriter.writeToFile(res.toDataFrame(), "/tmp/spark-tests/optimized-sql")
+    reasoner.showExecutionStats()
   }
 }

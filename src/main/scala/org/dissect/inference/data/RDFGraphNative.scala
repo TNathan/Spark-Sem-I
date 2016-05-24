@@ -3,7 +3,7 @@ package org.dissect.inference.data
 import org.apache.jena.graph.Triple
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.sql.{DataFrame, Row, SQLContext}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 
 /**
   * A data structure that comprises a set of triples.
@@ -66,7 +66,7 @@ class RDFGraphNative(val triples: RDD[RDFTriple]) extends AbstractRDFGraph[RDD[R
 
   def toRDD() = triples
 
-  def toDataFrame(sqlContext: SQLContext): DataFrame = {
+  def toDataFrame(sparkSession: SparkSession): DataFrame = {
     // convert RDD to DataFrame
     val schemaString = "subject predicate object"
 
@@ -77,10 +77,10 @@ class RDFGraphNative(val triples: RDD[RDFTriple]) extends AbstractRDFGraph[RDD[R
     val rowRDD = triples.map(t => Row(t.subject, t.predicate, t.`object`))
 
     // apply the schema to the RDD
-    val triplesDataFrame = sqlContext.createDataFrame(rowRDD, schema)
+    val triplesDataFrame = sparkSession.createDataFrame(rowRDD, schema)
 
     // register the DataFrame as a table
-    triplesDataFrame.registerTempTable("TRIPLES")
+    triplesDataFrame.createOrReplaceTempView("TRIPLES")
 
     triplesDataFrame
   }

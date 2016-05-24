@@ -20,7 +20,7 @@ object RDFGraphMaterializerTest {
     val conf = new SparkConf().setAppName("SPARK Reasoning")
     conf.set("spark.hadoop.validateOutputSpecs", "false")
     conf.setMaster("local[2]")
-//    conf.set("spark.eventLog.enabled", "true")
+    conf.set("spark.eventLog.enabled", "true")
     val sc = new SparkContext(conf)
 
     val m = ModelFactory.createDefaultModel()

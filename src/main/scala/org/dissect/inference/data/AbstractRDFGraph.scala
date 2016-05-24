@@ -2,7 +2,7 @@ package org.dissect.inference.data
 
 import org.apache.jena.graph.Triple
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, SQLContext}
+import org.apache.spark.sql.{DataFrame, SparkSession}
 
 /**
   * A data structure that comprises a set of triples.
@@ -54,7 +54,7 @@ abstract class AbstractRDFGraph[T, G <: AbstractRDFGraph[T, G]](triples: T) {
     */
   def size(): Long
 
-  def toDataFrame(sqlContext: SQLContext = null): DataFrame
+  def toDataFrame(sparkSession: SparkSession = null): DataFrame
 
   def toRDD(): RDD[RDFTriple]
 

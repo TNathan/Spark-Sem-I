@@ -1,7 +1,7 @@
 package org.dissect.inference.rules
 
 import org.apache.jena.vocabulary.{OWL2, RDF}
-import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.dissect.inference.data._
 import org.dissect.inference.rules.plan.{PlanExecutorNative, PlanExecutorSQL}
@@ -17,12 +17,12 @@ import scala.collection.mutable
 object TransitivityRuleTest {
 
   def main(args: Array[String]) {
-    // the SPARK config
-    val conf = new SparkConf().setAppName("SPARK Reasoning")
-    conf.set("spark.hadoop.validateOutputSpecs", "false")
-    conf.setMaster("local[2]")
-    conf.set("spark.eventLog.enabled", "true")
-    val sc = new SparkContext(conf)
+    val sparkSession = SparkSession.builder
+      .master("local[4]")
+      .appName("SPARK Reasoning")
+      .config("spark.eventLog.enabled", "true")
+      .getOrCreate()
+    val sc = sparkSession.sparkContext
 
     // generate graph
     val triples = new mutable.HashSet[RDFTriple]()
@@ -89,8 +89,8 @@ object TransitivityRuleTest {
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
 
     // create a DataFrame
-    val df = new RDFGraphDataFrame(graph.toDataFrame(sqlContext))
-    val planExecutor2 = new PlanExecutorSQL(sqlContext)
+    val df = new RDFGraphDataFrame(graph.toDataFrame(sparkSession))
+    val planExecutor2 = new PlanExecutorSQL(sparkSession)
     val res3 = planExecutor2.execute(plan, df)
     RDFGraphWriter.writeToFile(res3.toRDD(), "/tmp/spark-tests/sql")
 
