@@ -6,6 +6,7 @@ import org.apache.jena.graph.{Node, Triple}
 import org.apache.jena.reasoner.TriplePattern
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.analysis.Analyzer
+import org.apache.spark.sql.catalyst.optimizer.Optimizer
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.datasources.{DataSourceAnalysis, FindDataSourceTable, PreInsertCastAndRename, ResolveDataSource}
 import org.apache.spark.sql.execution.{QueryExecution, SparkSqlParser, datasources}
@@ -53,6 +54,11 @@ case class Plan(triplePatterns: Set[Triple], target: Triple, joins: mutable.Set[
     val analyzer = m3.invoke(sessionState).asInstanceOf[Analyzer]
 
     logicalPlan = analyzer.execute(logicalPlan)
+
+    val m4 = sessionState.getClass().getDeclaredMethod("optimizer")
+    m4.setAccessible(true)
+    val optimizer = m4.invoke(sessionState).asInstanceOf[Optimizer]
+    logicalPlan = optimizer.execute(logicalPlan)
 
 //    println(logicalPlan.toString())
 
@@ -112,9 +118,31 @@ case class Plan(triplePatterns: Set[Triple], target: Triple, joins: mutable.Set[
   }
 
   def fromPart(): String = {
-    var sql = " FROM " + triplePatterns.map(tp => fromPart(tp)).mkString(" INNER JOIN ")
-    sql += " ON " + joins.map(join => joinExpressionFor(join)).mkString(" AND ")
+    var sql = " FROM "
+
+    // convert to list of pairs (1,2), (2,3), (3,4)
+    val list = triplePatterns.toList.sliding(2).collect { case List(a, b) => (a, b) }.toList
+
+    val pair = list(0)
+    val tp1 = pair._1
+    val tp2 = pair._2
+    sql += fromPart(tp1) + " INNER JOIN " + fromPart(tp2) + " ON " + joinExpressionFor(joinsFor(tp1, tp2)) + " "
+
+    for (i <- 1 until list.length) {
+      val pair = list(i)
+      val tp1 = pair._1
+      val tp2 = pair._2
+      sql += " INNER JOIN " + fromPart(tp2) + " ON " + joinExpressionFor(joinsFor(tp1, tp2)) + " "
+    }
+
+
+    //    sql += triplePatterns.map(tp => fromPart(tp)).mkString(" INNER JOIN ")
+    //    sql += " ON " + joins.map(join => joinExpressionFor(join)).mkString(" AND ")
     sql
+  }
+
+  def joinsFor(tp1: Triple, tp2: Triple): Join = {
+    joins.filter(join => (join.tp1 == tp1 || join.tp2 == tp1) && (join.tp1 == tp2 || join.tp2 == tp2)).head
   }
 
   def wherePart(): String = {
