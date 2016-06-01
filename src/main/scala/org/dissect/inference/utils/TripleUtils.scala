@@ -57,9 +57,9 @@ object TripleUtils {
   }
 
   /**
-    * Returns the position of the node.
-    * @param node
-    * @param triple
+    * Returns the position of the node in the triple. If the node does not occur, `-1` will be returned.
+    * @param node the node
+    * @param triple the triple
     */
   def position(node: Node, triple: Triple): Int = {
     val ret = if(triple.subjectMatches(node)) {
