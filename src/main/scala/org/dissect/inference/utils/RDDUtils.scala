@@ -2,6 +2,8 @@ package org.dissect.inference.utils
 
 import org.apache.spark.rdd.RDD
 
+import scala.reflect.ClassTag
+
 /**
   * Utility class for RDD operations.
   *
@@ -10,7 +12,7 @@ import org.apache.spark.rdd.RDD
 object RDDUtils {
 
 
-  implicit class RDDOps[T](rdd: RDD[T]) {
+  implicit class RDDOps[T: ClassTag](rdd: RDD[T]) {
 
     def span(f: T => Boolean): (RDD[T], RDD[T]) = {
       val spaned = rdd.mapPartitions { iter =>
