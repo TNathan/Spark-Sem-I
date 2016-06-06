@@ -27,16 +27,9 @@ object SetOfRulesTest {
 
   def main(args: Array[String]) {
     // generate graph
-    val scale = 100000
-    val triples = generateData(scale)
-
-    // make RDD
-    println("distributing...")
-    val triplesRDD = sc.parallelize(triples.toSeq, 4)
-    triplesRDD.toDebugString
-
-    // create graph
-    val graph = new RDFGraphNative(triplesRDD)
+    val scale = 1
+//    val graph = generateData(scale)
+    val graph = loadData()
 
     val ruleNames = Set(
       "rdfs7",
@@ -54,6 +47,13 @@ object SetOfRulesTest {
     runSQL(graph, rules)
 
     sc.stop()
+  }
+
+  def loadData(): RDFGraphNative = {
+    println("loading data...")
+    val g = RDFGraphLoader.loadGraphFromFile("/home/me/tools/uobm_generator/preload_generated_uobm/univ_all.nt", sparkSession)
+    println("finished loading data.")
+    g
   }
 
   def generateData(scale: Integer) = {
@@ -100,7 +100,12 @@ object SetOfRulesTest {
       triples += RDFTriple(ns + "c" + i, RDF.`type`.getURI, c1)
     }
 
-    triples
+    // make RDD
+    println("distributing...")
+    val triplesRDD = sc.parallelize(triples.toSeq, 4)
+    triplesRDD.toDebugString
+
+    new RDFGraphNative(triplesRDD)
   }
 
   def runNaive(graph: RDFGraphNative, rules: Seq[Rule]) = {
